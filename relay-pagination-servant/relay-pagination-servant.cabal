@@ -48,9 +48,12 @@ library
     , base                 >=4.21   && <5
     , http-api-data        >=0.6    && <0.7
     , http-types           >=0.12   && <0.13
+    , lens                 >=5.2    && <5.4
+    , openapi-hs           >=4.1    && <4.2
     , relay-pagination
     , servant              >=0.20.3 && <0.21
     , servant-client-core  >=0.20.3 && <0.21
+    , servant-openapi-hs   >=4.1    && <4.2
     , servant-server       >=0.20.3 && <0.21
     , text                 >=2.0    && <2.2
     , wai                  >=3.2    && <3.3
@@ -60,29 +63,36 @@ test-suite relay-pagination-servant-test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test demo
   main-is:        Main.hs
-  other-modules:  ToyApi
+  other-modules:
+    ToyApi
+    ToyOpenApi
 
   -- warp requires the threaded RTS (its TimerManager will not start without it)
   ghc-options:    -threaded
   build-depends:
     , aeson
+    , aeson-pretty               >=0.8    && <0.9
     , base
     , bytestring
     , http-api-data
-    , http-client               >=0.7    && <0.8
+    , http-client                >=0.7    && <0.8
     , http-types
+    , insert-ordered-containers  >=0.2    && <0.3
+    , lens
+    , openapi-hs
     , relay-pagination
     , relay-pagination-servant
     , servant
-    , servant-client            >=0.20.3 && <0.21
+    , servant-client             >=0.20.3 && <0.21
     , servant-client-core
+    , servant-openapi-hs
     , servant-server
-    , sop-core                  >=0.5    && <0.6
-    , tasty                     >=1.4    && <1.6
-    , tasty-hunit               >=0.10   && <0.11
+    , sop-core                   >=0.5    && <0.6
+    , tasty                      >=1.4    && <1.6
+    , tasty-hunit                >=0.10   && <0.11
     , text
     , wai
-    , warp                      >=3.3    && <3.5
+    , warp                       >=3.3    && <3.5
 
 executable relay-demo
   import:         lang
@@ -94,4 +104,22 @@ executable relay-demo-openapi
   import:         lang
   hs-source-dirs: demo
   main-is:        OpenApiMain.hs
-  build-depends:  base
+  other-modules:
+    ToyApi
+    ToyOpenApi
+
+  build-depends:
+    , aeson
+    , aeson-pretty
+    , base
+    , bytestring
+    , lens
+    , openapi-hs
+    , relay-pagination
+    , relay-pagination-servant
+    , servant
+    , servant-openapi-hs
+    , servant-server
+    , sop-core
+    , text
+    , wai

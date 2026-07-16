@@ -21,6 +21,7 @@ module ToyApi
 where
 
 import Data.Aeson (FromJSON, ToJSON)
+import Data.OpenApi (ToSchema)
 import Data.Proxy (Proxy (..))
 import Data.SOP (I (..), NS (..))
 import Data.Text (Text)
@@ -38,7 +39,8 @@ data Item = Item
     itemName :: !Text
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
+  -- ToSchema lives here, next to the definition, where it is not an orphan.
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
 
 type ToyPageResponses =
   '[ Respond 200 "Page of items" (Connection Item),

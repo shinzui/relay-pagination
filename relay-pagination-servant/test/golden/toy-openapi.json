@@ -1,0 +1,193 @@
+{
+    "components": {
+        "schemas": {
+            "Connection_Item": {
+                "properties": {
+                    "edges": {
+                        "items": {
+                            "$ref": "#/components/schemas/Edge_Item"
+                        },
+                        "type": "array"
+                    },
+                    "pageInfo": {
+                        "$ref": "#/components/schemas/PageInfo"
+                    }
+                },
+                "required": [
+                    "edges",
+                    "pageInfo"
+                ],
+                "type": "object"
+            },
+            "Cursor": {
+                "description": "opaque pagination cursor",
+                "format": "base64url",
+                "type": "string"
+            },
+            "Edge_Item": {
+                "properties": {
+                    "cursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    },
+                    "node": {
+                        "$ref": "#/components/schemas/Item"
+                    }
+                },
+                "required": [
+                    "node",
+                    "cursor"
+                ],
+                "type": "object"
+            },
+            "Item": {
+                "properties": {
+                    "itemId": {
+                        "maximum": 9223372036854775807,
+                        "minimum": -9223372036854775808,
+                        "type": "integer"
+                    },
+                    "itemName": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "itemId",
+                    "itemName"
+                ],
+                "type": "object"
+            },
+            "PageInfo": {
+                "properties": {
+                    "endCursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    },
+                    "hasNextPage": {
+                        "type": "boolean"
+                    },
+                    "hasPreviousPage": {
+                        "type": "boolean"
+                    },
+                    "startCursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    }
+                },
+                "required": [
+                    "hasNextPage",
+                    "hasPreviousPage"
+                ],
+                "type": "object"
+            },
+            "RelayPageError": {
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "parameter": {
+                        "type": "string"
+                    },
+                    "retryable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message",
+                    "retryable"
+                ],
+                "type": "object"
+            }
+        }
+    },
+    "info": {
+        "title": "",
+        "version": ""
+    },
+    "openapi": "3.1.0",
+    "paths": {
+        "/items": {
+            "get": {
+                "operationId": "getItems",
+                "parameters": [
+                    {
+                        "description": "Forward page size (0..100). Defaults to 10 when neither 'first' nor 'last' is given. Cannot be combined with 'last' or 'before'.",
+                        "in": "query",
+                        "name": "first",
+                        "required": false,
+                        "schema": {
+                            "default": 10,
+                            "maximum": 100,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Opaque cursor: return items after this position (forward pagination).",
+                        "in": "query",
+                        "name": "after",
+                        "required": false,
+                        "schema": {
+                            "format": "base64url",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Backward page size (0..100). Cannot be combined with 'first' or 'after'.",
+                        "in": "query",
+                        "name": "last",
+                        "required": false,
+                        "schema": {
+                            "maximum": 100,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Opaque cursor: return items before this position (backward pagination).",
+                        "in": "query",
+                        "name": "before",
+                        "required": false,
+                        "schema": {
+                            "format": "base64url",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Connection_Item"
+                                }
+                            },
+                            "application/json;charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Connection_Item"
+                                }
+                            }
+                        },
+                        "description": "Page of items"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RelayPageError"
+                                }
+                            },
+                            "application/json;charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RelayPageError"
+                                }
+                            }
+                        },
+                        "description": "Invalid pagination"
+                    }
+                }
+            }
+        }
+    }
+}
