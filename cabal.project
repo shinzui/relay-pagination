@@ -20,10 +20,21 @@ source-repository-package
   location: https://github.com/shinzui/servant-openapi-hs.git
   tag: 7cbbc234cb7c0e900495b2f676e2912a7f456ff0
 
+-- Test-only dependency of relay-pagination-hasql (and later
+-- relay-pagination-conformance): throwaway PostgreSQL servers for
+-- integration tests. Not on Hackage; bump the pin deliberately.
+source-repository-package
+  type: git
+  location: https://github.com/shinzui/ephemeral-pg.git
+  tag: 215e4ae5fc844d322e2c715369bf5ec4ff285294
+
 -- Pinned repos count as project-local packages, so `cabal build all` builds
 -- them too — but their test suites are not ours to run.
 package openapi-hs
   tests: False
 
 package servant-openapi-hs
+  tests: False
+
+package ephemeral-pg
   tests: False

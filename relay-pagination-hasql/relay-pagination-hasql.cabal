@@ -2,14 +2,13 @@ cabal-version: 3.0
 name:          relay-pagination-hasql
 version:       0.1.0.0
 synopsis:
-  Hasql keyset-pagination engine for Relay-style cursors (stub until EP-3)
+  Keyset-pagination engine producing Relay connections from hasql queries
 
 description:
-  Will provide the keyset-pagination engine: declarative sort specifications,
-  typed cursor key codecs, and a paginate function that wraps a base hasql
-  snippet with keyset WHERE/ORDER BY/LIMIT clauses and assembles a Connection.
-  This package is a compilable stub; the implementation is delivered by
-  ExecPlan 3.
+  Keyset-pagination engine for Relay-style cursors over hasql: declarative
+  sort specifications with typed key codecs, generated keyset WHERE/ORDER
+  BY/LIMIT clauses with all cursor values as typed SQL parameters, and
+  assembly of spec-correct Connection responses.
 
 license:       BSD-3-Clause
 license-file:  LICENSE
@@ -33,21 +32,47 @@ common lang
   default-extensions:
     DeriveAnyClass
     DuplicateRecordFields
+    MultilineStrings
     OverloadedLabels
     OverloadedStrings
 
 library
   import:          lang
   hs-source-dirs:  src
-  exposed-modules: Relay.Pagination.Hasql
-  build-depends:
-    , base              >=4.21   && <5
-    , hasql             >=1.10.3 && <1.11
-    , relay-pagination
+  exposed-modules:
+    Relay.Pagination.Hasql
+    Relay.Pagination.Hasql.Connection
+    Relay.Pagination.Hasql.KeyCodec
+    Relay.Pagination.Hasql.SortSpec
+    Relay.Pagination.Hasql.Sql
 
-test-suite relay-pagination-hasql-test
+  build-depends:
+    , base                      >=4.21  && <5
+    , bytestring                >=0.11  && <0.13
+    , hasql                     >=1.10  && <1.11
+    , hasql-dynamic-statements  >=0.5.1 && <0.6
+    , relay-pagination
+    , text                      >=2.0   && <2.2
+    , time                      >=1.12  && <1.15
+    , uuid                      >=1.3   && <1.4
+
+test-suite relay-pagination-hasql-tests
   import:         lang
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
-  build-depends:  base
+  build-depends:
+    , base
+    , bytestring
+    , ephemeral-pg
+    , hasql
+    , hasql-dynamic-statements
+    , relay-pagination
+    , relay-pagination-hasql
+    , tasty
+    , tasty-golden
+    , tasty-hunit
+    , tasty-quickcheck
+    , text
+    , time
+    , uuid

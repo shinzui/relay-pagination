@@ -55,8 +55,8 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `relay-pagination-hasql` package skeleton exists (cabal file, stub modules, test-suite stub) and is listed in `cabal.project`; `cabal build relay-pagination-hasql` succeeds
-- [ ] M1: `ephemeral-pg` wired as a test-only dependency via a `source-repository-package` pin in `cabal.project`; `cabal build relay-pagination-hasql-tests` resolves it
+- [x] M1: `relay-pagination-hasql` package skeleton exists (cabal file, stub modules, test-suite stub) and is listed in `cabal.project`; `cabal build relay-pagination-hasql` succeeds (2026-07-16: extended EP-1's stub package — EP-1 had already created the directory, cabal file, and umbrella module; added the four submodule stubs, MultilineStrings, and the full dependency set)
+- [x] M1: `ephemeral-pg` wired as a test-only dependency via a `source-repository-package` pin in `cabal.project`; `cabal build relay-pagination-hasql-tests` resolves it (2026-07-16: pin builds; skeleton test passes)
 - [ ] M2: `Relay.Pagination.Hasql.KeyCodec` with `KeyCodec` and built-ins `int8Key`, `textKey`, `uuidKey`, `timestamptzKey`, `boolKey`
 - [ ] M2: `Relay.Pagination.Hasql.SortSpec` with `SortDirection`, `KeyColumn`, `SortSpec`, `sortSpecFingerprint`
 - [ ] M2: unit tests — codec round-trip properties (including timestamptz microsecond exactness) and fingerprint golden/sensitivity tests pass
@@ -207,6 +207,18 @@ Record every decision made while working on the plan.
   spins one cached PostgreSQL (`EphemeralPg.withCached`) for the whole group to keep runtime
   in single-digit seconds.
   Date: 2026-07-15
+
+- Decision: `cabal.project` disables the pinned `ephemeral-pg` package's test suites (`package ephemeral-pg` / `tests: False`), matching EP-1's treatment of the openapi pins.
+  Rationale: The repo-wide `tests: True` would otherwise make `cabal test all` run ephemeral-pg's own database-spawning suite; pinned packages' tests are not ours to run.
+  Date: 2026-07-16
+
+- Decision: EP-1 shipped the cursor key error constructors as `KeyTypeMismatch { expectedTag :: Text, actualValue :: KeyValue }` and `KeyCountMismatch { expectedCount :: Int, actualCount :: Int }` (not the approximate `CursorKeyTypeMismatch { expectedTag, actualTag }` names this plan sketched); this plan uses EP-1's shipped names, with `actualValue` carrying the whole mismatched `KeyValue`.
+  Rationale: The plan instructs "use whatever names EP-1 actually shipped". No core changes needed.
+  Date: 2026-07-16
+
+- Decision: Keep EP-1's full house warning set (including `-Wunused-packages`, `-Wincomplete-record-updates`, `-Wincomplete-uni-patterns`) rather than this plan's smaller sketched set, and follow the house `common warnings`/`common lang` split.
+  Rationale: The plan says to model the stanzas on the core package's cabal file from EP-1.
+  Date: 2026-07-16
 
 - Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md` to this package: GHC 9.12.4+/GHC2024, the shared baseline extensions, postpositive qualified imports, explicit strict records and deriving strategies, and `MultilineStrings` in the `lang` stanza for fixture and demonstration SQL. Pattern-match existential `KeyColumn` records with explicit field puns rather than `RecordWildCards`.
   Rationale: The registered sources `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-record-patterns`, and `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings` are the current project conventions. Multi-line schema, insert, and base-query text is materially easier to audit in native multiline literals; explicit existential patterns make the hidden value type and the fields that keep it in scope visible.

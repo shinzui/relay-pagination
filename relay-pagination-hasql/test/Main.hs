@@ -1,4 +1,11 @@
 module Main (main) where
 
+import Test.Tasty
+import Test.Tasty.HUnit
+
 main :: IO ()
-main = putStrLn "no tests yet: implemented by a later ExecPlan"
+main =
+  defaultMain $
+    testGroup
+      "relay-pagination-hasql"
+      [testCase "skeleton" (pure ())]
