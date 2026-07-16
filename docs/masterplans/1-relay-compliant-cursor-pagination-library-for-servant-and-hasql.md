@@ -53,7 +53,7 @@ Alternatives considered: folding the servant surface into the core package (reje
 | 1 | Scaffold the repository and the relay-pagination core package | docs/plans/1-scaffold-the-repository-and-the-relay-pagination-core-package.md | None | None | Complete |
 | 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | Complete |
 | 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | Complete |
-| 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | In Progress |
+| 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | Complete |
 | 5 | Guides for developers and agents, examples, and release readiness | docs/plans/5-guides-for-developers-and-agents-examples-and-release-readiness.md | EP-2, EP-3, EP-4 | None | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -164,12 +164,12 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [x] EP-3 M3: Keyset WHERE/ORDER BY/LIMIT n+1 snippet generation, six golden SQL files (2026-07-16)
 - [x] EP-3 M4: Connection assembly and public paginate; exact-boundary hasNextPage regression (pure) (2026-07-16)
 - [x] EP-3 M5: ephemeral-pg integration — adversarial 25-row fixture walked both directions, demo transcript (2026-07-16)
-- [ ] EP-4 M1: relay-pagination-conformance skeleton
-- [ ] EP-4 M2: Walker with loop detection + in-memory oracle
-- [ ] EP-4 M3: Invariant checker, report, and proof of teeth (three broken paginators fail)
-- [ ] EP-4 M4: Adversarial QuickCheck datasets against EP-3's engine over ephemeral-pg
-- [ ] EP-4 M5: Mutation-under-walk properties (insert/delete during walk; OFFSET paginator fails)
-- [ ] EP-4 M6: HTTP-level conformance through RelayPage (deferrable if EP-2 unfinished)
+- [x] EP-4 M1: relay-pagination-conformance skeleton (2026-07-16)
+- [x] EP-4 M2: Walker with loop detection + in-memory oracle (2026-07-16)
+- [x] EP-4 M3: Invariant checker, report, and proof of teeth (three broken paginators fail) (2026-07-16)
+- [x] EP-4 M4: Adversarial QuickCheck datasets against EP-3's engine over ephemeral-pg (2026-07-16)
+- [x] EP-4 M5: Mutation-under-walk properties (insert/delete during walk; OFFSET paginator fails) (2026-07-16)
+- [x] EP-4 M6: HTTP-level conformance through RelayPage (EP-2 was Complete; not deferred) (2026-07-16)
 - [ ] EP-5 M1: domain-first NamedRoutes/MultiVerb members example, conformance test, deterministic OpenAPI generator, runnable via just example
 - [ ] EP-5 M2: Developer guide (docs/guides/implementing-pagination.md)
 - [ ] EP-5 M3: Agent guide + copy-able agents/skills/add-paginated-endpoint skill
@@ -193,6 +193,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While implementing EP-3 (2026-07-16): the engine's durable design (expanded lexicographic predicate, FNV-1a fingerprint serialization with pinned goldens, NOT NULL + unique-tie-breaker v1 restrictions, statement-level unprepared API, Haskell-side cursor minting) is distilled in `docs/adr/3-hasql-keyset-engine.md`.
 - While implementing EP-2 (2026-07-16): **anything that runs warp needs `ghc-options: -threaded`** — warp's TimerManager refuses to start on the single-threaded RTS and every request dies with a connection reset (`NoResponseDataReceived`). EP-4's HTTP-conformance milestone and EP-5's example server must set it on their test-suite/executable stanzas. Related gotcha: cabal may fail to relink after a `ghc-options` change (check `+RTS --info` for `rts_thr`; delete the component's `dist-newstyle` dir to force it).
 - While implementing EP-2 (2026-07-16): core (EP-1) had not shipped the `cursorToText`/`cursorFromText` helpers EP-2 assumed; EP-2 M1 added them to `Relay.Pagination.Cursor` next to the type, with the HTTP instances delegating to them. Also, `servant-openapi-hs`'s `addParam` prepends parameters, so the `HasOpenApi (RelayPage …)` instance applies the four params in reverse to document Relay order. EP-2's durable decisions (type-level page sizes, the `RelayPageError` 400 contract, the validation split with the engine, the orphan OpenAPI policy, deterministic artifacts) are distilled in `docs/adr/4-servant-pagination-surface.md`.
+- While implementing EP-4 (2026-07-16): **test-suite groups sharing a database must be `sequentialTestGroup`** — the `-threaded` RTS that warp requires makes tasty run tests concurrently, and TRUNCATE-based per-case isolation then corrupts every sibling test (all seven DB properties failed at once when the HTTP group landed). Also: a `Double` of epoch seconds round-trips microseconds *exactly* at 2026 epoch magnitudes, so lossy-cursor reproductions need single-precision `Float`; and hasql 1.10 exposes `preparable`/`unpreparable` smart constructors rather than the `Statement` data constructor. EP-4's durable contracts (library-depends-only-on-core boundary, `FetchPage` handle, walk-failure taxonomy, six invariants, teeth requirement) are distilled in `docs/adr/5-conformance-suite-boundary-and-walker-contract.md`; EP-5's example conformance test should copy the sequential-group and `-threaded` patterns.
 - During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 

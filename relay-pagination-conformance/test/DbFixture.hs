@@ -20,6 +20,7 @@ module DbFixture
   )
 where
 
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Functor.Contravariant ((>$<))
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Ord (Down (..), comparing)
@@ -28,6 +29,7 @@ import Data.Text qualified as Text
 import Data.Time (UTCTime)
 import Data.UUID.Types (UUID)
 import EphemeralPg qualified as Pg
+import GHC.Generics (Generic)
 import Hasql.Connection qualified as HasqlConn
 import Hasql.Decoders qualified as Decoders
 import Hasql.DynamicStatements.Snippet (Snippet)
@@ -51,7 +53,10 @@ data TestRow = TestRow
     updatedAt :: !UTCTime,
     payload :: !Text
   }
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  -- JSON instances for the M6 HTTP walk (aeson round-trips UTCTime at
+  -- microsecond precision losslessly).
+  deriving anyclass (ToJSON, FromJSON)
 
 -- | The canonical order under 'testSortSpec': @updated_at DESC, row_id ASC@.
 canonicalOrder :: TestRow -> TestRow -> Ordering

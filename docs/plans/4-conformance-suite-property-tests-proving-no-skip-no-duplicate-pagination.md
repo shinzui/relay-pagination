@@ -53,12 +53,13 @@ evidence of teeth.
 - [x] M4: ephemeral-pg fixture (`withResource`-based shared server + connection, `test/DbFixture.hs`) with the `conformance_rows` schema, `unnest`-based multi-row insert, and EP-3 `paginate` wired as `fetchViaEngine`. (2026-07-16)
 - [x] M4: Adversarial QuickCheck generators (heavy ties, adjacent microseconds, exact page-size multiples 0/1/n/n+1/2n/2n+1, page sizes 1 and 100) all green against the EP-3 engine — 4 properties × 20 cases in ~1 s. Spot check performed: dropping the first expected row made the property fail with a Completeness violation naming that row's UUID (plus the corresponding EdgeOrderInvariance hits), then reverted. (2026-07-16)
 - [x] M5: Mutation-under-walk properties (insert-behind, insert-ahead, delete-visited) green against the EP-3 engine (15 cases each); OFFSET-paginator counterexample demonstrably fails the insert-behind schedule (row displaced into a second visit, inserted row leaking into the walk); real transcript captured into Validation. (2026-07-16)
-- [ ] M6 (soft dep EP-2 — defer, do not block, if EP-2 is not Complete): HTTP-level conformance walk through a warp server exposing a `RelayPage` endpoint, `fetchPage` wired via servant-client.
-- [ ] Final: MasterPlan registry row for EP-4 set to Complete; ADR distillation pass done; Outcomes & Retrospective written.
+- [x] M6: HTTP-level conformance walk through a warp server exposing a `RelayPage 5 50` endpoint (`NamedRoutes`/`MultiVerb` with hand-written `AsUnion`, one shared proxy for `serve` and `genericClient`), `fetchPage` wired via servant-client over the 25-row adversarial fixture. EP-2 was Complete, so nothing was deferred. Spot check performed: swapping the Forward/Backward translation in `toClientPage` failed the walk with Completeness and BackwardSymmetry violations, then reverted. (2026-07-16)
+- [x] Final: MasterPlan registry row for EP-4 set to Complete; ADR distillation pass done (`docs/adr/5-conformance-suite-boundary-and-walker-contract.md`: package boundary, FetchPage contract, walk-failure taxonomy, invariant set, teeth requirement, sequential DB groups); Outcomes & Retrospective written. (2026-07-16)
 
 
 ## Surprises & Discoveries
 
+- While implementing M6 (2026-07-16): **adding `-threaded` (required by warp) let tasty run tests concurrently, and every DB-backed group corrupted every other.** The DB groups share one connection and one table per group; once the suite went threaded, all seven database properties failed with mass-duplication reports (another test's TRUNCATE/INSERT interleaving mid-walk). Fix: `sequentialTestGroup name AllFinish [...]` (tasty ≥ 1.5) on every group whose tests share a database resource. Any future DB-backed group must do the same.
 - While implementing M3 (2026-07-16): **a `Double` of epoch seconds round-trips microseconds exactly at 2026 epoch magnitudes.** At ~1.77e9 seconds the ulp is ≈0.24 µs, under the 0.5 µs round-to-nearest threshold, so `round (us/1e6 * 1e6) == us` for every microsecond count — the planned "odd microsecond counts near a large epoch" search found no non-round-tripping stamp in 1000 candidates. `Double`-seconds cursors only start corrupting microseconds beyond epoch ~2^33 seconds (~year 2242); the reference bug's practical risk is text-formatting/truncation variants and the general fragility of the pattern. The teeth test models the same bug class with single-precision `Float` (ulp ≈ 128 s at this magnitude), which skips deterministically.
 - While implementing M2 (2026-07-16): with `DuplicateRecordFields`, an unqualified `cursor req` selector is ambiguous (`Edge.cursor` vs `PageRequest.cursor` are both in scope from `Relay.Pagination`) — GHC 9.12 no longer type-directs selector disambiguation. Pattern-match the `PageRequest` fields instead (`PageRequest {cursor = mCursor}`); the same applies anywhere both record types are imported.
 
@@ -108,7 +109,35 @@ evidence of teeth.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+**Completed 2026-07-16, including M6 (EP-2 was Complete, so nothing was
+deferred).** The purpose is met: `relay-pagination-conformance` ships a
+walker (`walkForward`/`walkBackward` with three termination defenses), a
+six-invariant checker with human-readable reports, and a tasty adapter, all
+behind the single `FetchPage` callback; `cabal test relay-pagination-conformance`
+runs 28 tests green in ~1.2 s, spanning pure walker/checker units, the three
+proof-of-teeth broken paginators, four adversarial QuickCheck property
+families against the real EP-3 engine over ephemeral-pg, three
+mutation-under-walk properties plus the failing OFFSET counterexample, and a
+full conformance walk over HTTP through EP-2's `RelayPage`.
+
+Evidence of teeth is real and captured in Validation: `brokenBoundary`
+reproduces the reference service's phantom-page bug and the report names both
+offending pages; the OFFSET paginator's insert-behind failure shows the exact
+displaced row visited twice; two uncommitted spot checks (dropped expected
+row; swapped Forward/Backward client translation) each failed with precisely
+targeted violations.
+
+What differed from the plan: the lossy-cursor teeth model needed
+single-precision `Float` because a `Double` of epoch seconds round-trips
+microseconds exactly at 2026 magnitudes (a genuinely surprising discovery,
+now in ADR 5); the OFFSET counterexample manifests as duplication rather than
+the sketched skip; hasql 1.10 exposes `preparable`/`unpreparable` instead of
+the `Statement` constructor; and `-threaded` (for warp) made tasty concurrent,
+which forced `sequentialTestGroup` on every DB-sharing group after all seven
+database properties failed at once with cross-test contamination — the
+biggest debugging session of the plan and the most reusable lesson. Remaining
+gaps: none in scope; the conformance library API is now the contract EP-5's
+guides quote.
 
 
 ## Context and Orientation

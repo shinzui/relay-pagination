@@ -47,9 +47,11 @@ import Test.Tasty.QuickCheck
 
 tests :: TestTree
 tests = withResource acquireDb releaseDb \getDb ->
+  -- Sequential: these tests share one connection and one table (see DbSpec).
   localOption (QuickCheckTests 15) $
-    testGroup
+    sequentialTestGroup
       "mutation under walk"
+      AllFinish
       [ testProperty "engine: insert behind the cursor — initial rows exactly once, inserted rows never" $
           forAll genMutationCase \(size, initial, extras) -> ioProperty do
             (_, conn) <- getDb

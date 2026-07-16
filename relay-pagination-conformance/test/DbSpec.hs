@@ -19,10 +19,13 @@ import Test.Tasty.QuickCheck
 tests :: TestTree
 tests = withResource acquireDb releaseDb \getDb ->
   -- Database-backed properties cost real time; 20 cases each is plenty
-  -- given how adversarial the generators are.
+  -- given how adversarial the generators are. The group is sequential:
+  -- its tests share one connection and one table, and the -threaded RTS
+  -- (needed for warp in HttpSpec) lets tasty run tests concurrently.
   localOption (QuickCheckTests 20) $
-    testGroup
+    sequentialTestGroup
       "db (EP-3 engine over ephemeral-pg)"
+      AllFinish
       [ conformanceProperty getDb "heavy ties: boundaries inside tie runs" genHeavyTies,
         conformanceProperty getDb "adjacent microseconds" genAdjacentMicros,
         conformanceProperty getDb "exact page-boundary sizes" genExactBoundaries,
