@@ -51,7 +51,7 @@ library
     , http-types           >=0.12   && <0.13
     , lens                 >=5.2    && <5.4
     , openapi-hs           >=4.1    && <4.2
-    , relay-pagination
+    , relay-pagination     >=0.1    && <0.2
     , servant              >=0.20.3 && <0.21
     , servant-client-core  >=0.20.3 && <0.21
     , servant-openapi-hs   >=4.1    && <4.2
@@ -74,14 +74,14 @@ test-suite relay-pagination-servant-test
     , aeson
     , aeson-pretty               >=0.8    && <0.9
     , base
-    , bytestring
+    , bytestring                 >=0.11   && <0.13
     , http-api-data
     , http-client                >=0.7    && <0.8
     , http-types
     , insert-ordered-containers  >=0.2    && <0.3
     , lens
     , openapi-hs
-    , relay-pagination
+    , relay-pagination           >=0.1    && <0.2
     , relay-pagination-servant
     , servant
     , servant-client             >=0.20.3 && <0.21
@@ -107,14 +107,14 @@ executable relay-demo
     , aeson
     , base
     , openapi-hs
-    , relay-pagination
+    , relay-pagination          >=0.1 && <0.2
     , relay-pagination-servant
     , servant
     , servant-server
-    , sop-core
+    , sop-core                  >=0.5 && <0.6
     , text
     , wai
-    , warp
+    , warp                      >=3.3 && <3.5
 
 executable relay-demo-openapi
   import:         lang
@@ -126,16 +126,16 @@ executable relay-demo-openapi
 
   build-depends:
     , aeson
-    , aeson-pretty
+    , aeson-pretty              >=0.8  && <0.9
     , base
-    , bytestring
+    , bytestring                >=0.11 && <0.13
     , lens
     , openapi-hs
-    , relay-pagination
+    , relay-pagination          >=0.1  && <0.2
     , relay-pagination-servant
     , servant
     , servant-openapi-hs
     , servant-server
-    , sop-core
+    , sop-core                  >=0.5  && <0.6
     , text
     , wai

@@ -48,7 +48,7 @@ library
     , base              >=4.21 && <5
     , bytestring        >=0.11 && <0.13
     , containers        >=0.7  && <0.9
-    , relay-pagination
+    , relay-pagination  >=0.1  && <0.2
     , tasty             >=1.4  && <1.6
     , tasty-hunit       >=0.10 && <0.11
     , text              >=2.0  && <2.2
@@ -85,7 +85,7 @@ test-suite relay-pagination-conformance-test
     , hasql-dynamic-statements      >=0.5    && <0.6
     , http-client                   >=0.7    && <0.8
     , quickcheck-instances          >=0.3    && <0.4
-    , relay-pagination
+    , relay-pagination              >=0.1    && <0.2
     , relay-pagination-conformance
     , relay-pagination-hasql
     , relay-pagination-servant
