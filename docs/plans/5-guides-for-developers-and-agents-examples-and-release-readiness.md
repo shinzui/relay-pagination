@@ -31,7 +31,7 @@ This section must always reflect the actual current state of the work.
 - [x] M1: `examples/members-server` package created with both executables and its conformance test, listed in `cabal.project`; `cabal build members-server` and `cabal test members-server-test` pass (4/4 cases: conformance walks at page sizes 3 and 4, typed 400s for mixed directions and foreign-fingerprint cursors) (2026-07-16)
 - [x] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves the same OpenAPI 3.1 value (`"openapi": "3.1.0"`, paths `/members` + `/openapi.json`, operation ids `listMembers`/`getOpenApi`) that `members-openapi` writes to `docs/api/openapi.json` — proven byte-identical across two consecutive generations (2026-07-16)
 - [x] M1: Curl transcript captured from a real run and pasted into this plan (Validation section) — developer-guide copy lands with M2 (2026-07-16)
-- [ ] M2: `docs/guides/implementing-pagination.md` written, all code blocks compile-checked against the example server
+- [x] M2: `docs/guides/implementing-pagination.md` written; every Haskell block machine-verified as a verbatim substring of the compiled example sources (scripted substring check over `examples/members-server/**/*.hs` plus the conformance `Walk` module — 9/9 blocks match); real curl transcript and real golden SQL shape included (2026-07-16)
 - [ ] M3: `docs/guides/agent-guide.md` written
 - [ ] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written with frontmatter and templates; verified self-contained (no references to files outside the skill directory except package docs)
 - [ ] M4: `README.md` written (positioning, quickstart, package map, guide pointers, release-order note)
