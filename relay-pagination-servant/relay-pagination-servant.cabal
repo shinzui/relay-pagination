@@ -98,7 +98,22 @@ executable relay-demo
   import:         lang
   hs-source-dirs: demo
   main-is:        Main.hs
-  build-depends:  base
+  other-modules:  ToyApi
+
+  -- warp requires the threaded RTS (its TimerManager will not start without it)
+  ghc-options:    -threaded
+  build-depends:
+    , aeson
+    , base
+    , openapi-hs
+    , relay-pagination
+    , relay-pagination-servant
+    , servant
+    , servant-server
+    , sop-core
+    , text
+    , wai
+    , warp
 
 executable relay-demo-openapi
   import:         lang

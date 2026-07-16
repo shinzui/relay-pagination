@@ -141,8 +141,8 @@ instance
 -- Prefer the smart constructors 'noPageArgs', 'forwardPage', and
 -- 'backwardPage' for the valid combinations. The raw constructor stays
 -- exported deliberately so tests can send invalid combinations and exercise
--- the server's 400 path. Consume it with an explicit record pattern; the
--- field named @last@ shadows 'Prelude.last' when punned.
+-- the server's 400 path. Consume it with an explicit record pattern (a pun
+-- on the @last@ field would shadow 'Prelude.last').
 data ClientPage = ClientPage
   { first :: !(Maybe Int),
     after :: !(Maybe Cursor),
@@ -177,8 +177,8 @@ instance (Client.HasClient m api) => Client.HasClient m (RelayPage d mx :> api) 
   hoistClientMonad pm _ f cl = Client.hoistClientMonad pm (Proxy @api) f . cl
 
 addPageParams :: ClientPage -> Client.Request -> Client.Request
-addPageParams ClientPage {first, after, last, before} =
-  add "before" before . add "last" last . add "after" after . add "first" first
+addPageParams ClientPage {first = mFirst, after = mAfter, last = mLast, before = mBefore} =
+  add "before" mBefore . add "last" mLast . add "after" mAfter . add "first" mFirst
   where
     add :: (ToHttpApiData v) => Text -> Maybe v -> Client.Request -> Client.Request
     add name =
@@ -192,8 +192,8 @@ instance (HasLink sub) => HasLink (RelayPage d mx :> sub) where
   toLink toA _ l page = toLink toA (Proxy @sub) (addPageLinkParams page l)
 
 addPageLinkParams :: ClientPage -> Link -> Link
-addPageLinkParams ClientPage {first, after, last, before} =
-  add "before" before . add "last" last . add "after" after . add "first" first
+addPageLinkParams ClientPage {first = mFirst, after = mAfter, last = mLast, before = mBefore} =
+  add "before" mBefore . add "last" mLast . add "after" mAfter . add "first" mFirst
   where
     add :: (ToHttpApiData v) => String -> Maybe v -> Link -> Link
     add name = maybe id (\v -> addQueryParam (SingleParam name (toQueryParam v)))

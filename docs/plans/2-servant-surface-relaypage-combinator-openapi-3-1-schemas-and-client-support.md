@@ -80,9 +80,9 @@ This section must always reflect the actual current state of the work.
 - [x] M4: `Relay.Pagination.Servant.OpenApi` module with `HasOpenApi (RelayPage d m :> sub)` and confined `ToSchema`/`ToParamSchema` instances for `Cursor`, `RelayPageError`, `PageInfo`, `Edge a`, `Connection a`. (2026-07-16)
 - [x] M4: dedicated `relay-demo-openapi` executable writes sorted, newline-terminated JSON (shared rendering lives in `demo/ToyOpenApi.hs`); checked artifact is drift-tested, regenerating produces zero diff, and shows `"openapi": "3.1.0"`. (2026-07-16)
 - [x] M4: OpenAPI tests pin the served path set (`/items` only, operation id `getItems`), the 200/400 response set, parameter order/bounds/default/format, the six component schemas (`Connection_Item`, `Cursor`, `Edge_Item`, `Item`, `PageInfo`, `RelayPageError`), and `validateToJSON` agreement for `Connection Item` and `RelayPageError`. All 23 tests green; `cabal build --dry-run` shows zero `openapi3-` matches. (2026-07-16)
-- [ ] M5: `relay-demo` executable serves the toy API; curl transcript captured into this plan's Validation section.
-- [ ] M5: haddocks written for every exported name; fourmolu clean; full `cabal test all` green; MasterPlan registry row for EP-2 flipped to Complete and its Progress checkboxes ticked.
-- [ ] ADR distillation pass done (orphan-instance policy, error-body shape, type-level page-size config).
+- [x] M5: `relay-demo` executable serves the toy API on port 8080; real curl transcript captured into this plan's Validation section. (2026-07-16)
+- [x] M5: haddocks written for every exported name (module haddock carries the error-body contract and the sole-home orphan note); fourmolu clean; full `cabal test all` green (core 45, servant 23, hasql 33, conformance stub); MasterPlan registry row for EP-2 flipped to Complete and its Progress checkboxes ticked. (2026-07-16)
+- [x] ADR distillation pass done: `docs/adr/4-servant-pagination-surface.md` records the type-level page-size decision, the 400 error-envelope contract, the validation split, the orphan-instance policy, the deterministic-artifact policy, and the warp `-threaded` operational note. (2026-07-16)
 
 
 ## Surprises & Discoveries
@@ -162,7 +162,28 @@ Compare the result against the original purpose. Before marking the plan complet
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+**Completed 2026-07-16.** The plan's purpose is met in full: `RelayPage 10 100
+:> MultiVerb 'GET '[JSON] …` in a `NamedRoutes` record gives parsing/validation
+of the four Relay parameters, a handler receiving one validated `PageRequest`,
+typed 400s using the exported `RelayPageError` (decoded by generated clients as
+the result sum, proven by the mixed-`ClientPage` round trip), `safeLink`
+support, and a checked OpenAPI 3.1 artifact whose first content assertion is
+`"openapi": "3.1.0"`. All three acceptance anchors hold: 23 servant tests green
+over real HTTP, the curl transcript reproduced against `relay-demo`, and the
+drift check passes with zero `openapi3-` packages in the build plan.
+
+What differed from the plan as written: core lacked `cursorToText`/
+`cursorFromText` (added in M1 next to the type, exactly per the plan's
+reconciliation rule); the toy API lived in `demo/ToyApi.hs` from M2 rather
+than being moved there in M4; cabal dependencies were added per-milestone to
+stay `-Wunused-packages`-clean; `addParam` prepends so the OpenAPI instance
+applies parameters in reverse; and warp requires `-threaded`, which cost the
+only real debugging session of the plan (all eight server tests failing with
+connection resets until the RTS way was checked). Lessons for EP-4/EP-5: any
+executable or test suite that runs warp needs `-threaded`, and `cabal` may
+fail to relink after a `ghc-options` change (delete the component's
+`dist-newstyle` dir). Remaining gaps: none within scope; `totalCount`,
+cursor signing, and non-hasql backends stay excluded per the MasterPlan.
 
 
 ## Context and Orientation
@@ -997,35 +1018,42 @@ negative size, and a size over the type-level maximum; acceptance of `first=0`; 
 drift/path/response assertions; and `ToJSON`/`ToSchema` validation.
 
 **2. The curl transcript.** With `cabal run relay-pagination-servant:relay-demo` running,
-this transcript must reproduce (update this section with real output once captured):
+this transcript reproduces (real output captured 2026-07-16; the JSON key order
+inside `edges[]`/`pageInfo` follows core's hand-written encoders, and generic
+aeson orders the error keys alphabetically):
 
 ```console
 $ curl -s 'http://localhost:8080/items?first=2' | jq .
 {
   "edges": [
     {
-      "cursor": "ZWRnZS0x",
-      "node": { "itemId": 2, "itemName": "forward" }
+      "node": {
+        "itemId": 2,
+        "itemName": "forward"
+      },
+      "cursor": "ZWRnZS0x"
     }
   ],
   "pageInfo": {
-    "endCursor": "ZWRnZS0x",
     "hasNextPage": false,
     "hasPreviousPage": false,
-    "startCursor": "ZWRnZS0x"
+    "startCursor": "ZWRnZS0x",
+    "endCursor": "ZWRnZS0x"
   }
 }
 
-$ curl -si 'http://localhost:8080/items?after=%25%25garbage' | head -3
+$ curl -si 'http://localhost:8080/items?after=%25%25garbage' | head -5
 HTTP/1.1 400 Bad Request
-...
+Transfer-Encoding: chunked
+Date: Thu, 16 Jul 2026 14:37:00 GMT
+Server: Warp/3.4.14
 Content-Type: application/json
 
 $ curl -s 'http://localhost:8080/items?after=%25%25garbage'
-{"code":"invalid_cursor","message":"invalid cursor: ...","retryable":false,"parameter":"after"}
+{"code":"invalid_cursor","message":"invalid cursor: not unpadded base64url: Base64-encoded bytestring has invalid size","parameter":"after","retryable":false}
 
 $ curl -s 'http://localhost:8080/items?first=2&last=2'
-{"code":"mixed_pagination_directions","message":"cannot combine forward (first/after) and backward (last/before) arguments","retryable":false,"parameter":"last"}
+{"code":"mixed_pagination_directions","message":"cannot combine forward (first/after) and backward (last/before) arguments","parameter":"last","retryable":false}
 ```
 
 **3. The derived document.** `relay-pagination-servant/test/golden/toy-openapi.json` is

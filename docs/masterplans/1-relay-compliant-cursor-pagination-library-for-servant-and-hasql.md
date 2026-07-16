@@ -51,7 +51,7 @@ Alternatives considered: folding the servant surface into the core package (reje
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Scaffold the repository and the relay-pagination core package | docs/plans/1-scaffold-the-repository-and-the-relay-pagination-core-package.md | None | None | Complete |
-| 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | In Progress |
+| 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | Complete |
 | 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | Complete |
 | 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | Not Started |
 | 5 | Guides for developers and agents, examples, and release readiness | docs/plans/5-guides-for-developers-and-agents-examples-and-release-readiness.md | EP-2, EP-3, EP-4 | None | Not Started |
@@ -154,11 +154,11 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [x] EP-1 M3: Core wire types with Relay-shaped JSON, byte-stable golden tests (2026-07-16)
 - [x] EP-1 M4: Cursor codec — version + fingerprint, property round-trips, golden wire strings (2026-07-16)
 - [x] EP-1 M5: mkPageRequest validation matrix, wire-format ADR, acceptance sweep (2026-07-16)
-- [ ] EP-2 M1: Cursor FromHttpApiData/ToHttpApiData in core; relay-pagination-servant skeleton
-- [ ] EP-2 M2: RelayPage HasServer plus exported 400 envelope; NamedRoutes/MultiVerb toy API with manual AsUnion
-- [ ] EP-2 M3: ClientPage, HasClient, HasLink; typed 200/400 round-trip against warp
-- [ ] EP-2 M4: Type-derived OpenAPI 3.1, deterministic generator, schema/response/path tests, checked artifact
-- [ ] EP-2 M5: Demo executable, curl transcript, polish, closeout
+- [x] EP-2 M1: Cursor FromHttpApiData/ToHttpApiData in core; relay-pagination-servant skeleton (2026-07-16)
+- [x] EP-2 M2: RelayPage HasServer plus exported 400 envelope; NamedRoutes/MultiVerb toy API with manual AsUnion (2026-07-16)
+- [x] EP-2 M3: ClientPage, HasClient, HasLink; typed 200/400 round-trip against warp (2026-07-16)
+- [x] EP-2 M4: Type-derived OpenAPI 3.1, deterministic generator, schema/response/path tests, checked artifact (2026-07-16)
+- [x] EP-2 M5: Demo executable, curl transcript, polish, closeout (2026-07-16)
 - [x] EP-3 M1: relay-pagination-hasql skeleton, ephemeral-pg pin (2026-07-16)
 - [x] EP-3 M2: KeyCodec built-ins, existential KeyColumn/SortSpec, FNV-1a fingerprint goldens (2026-07-16)
 - [x] EP-3 M3: Keyset WHERE/ORDER BY/LIMIT n+1 snippet generation, six golden SQL files (2026-07-16)
@@ -191,6 +191,8 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While implementing EP-1 (2026-07-16): the seihou `nix-haskell-flake` scaffold (committed in e997197) differs benignly from EP-1's quoted files — treefmt runs `cabal-fmt` (not cabal-gild), and `nix/haskell.nix` adds a persistent dev-Postgres shell hook plus a `packages.default = callCabal2nix … inputs.self` that assumes a single root .cabal file and will not build this multi-package project (dev shell and `nix fmt` are unaffected; extend via `flake.module.nix` if `nix build` is ever needed). The treefmt pre-commit hook actively reformats freshly written Haskell/cabal files on first commit — plan for a "commit, hook formats, re-add, commit" loop.
 - While implementing EP-3 (2026-07-16): **hasql 1.10 runs sessions via `Hasql.Connection.use`** (`Connection -> Session a -> IO (Either SessionError a)`), not the older `Session.run`; multi-statement DDL goes through `Session.script :: Text -> Session ()`. EP-4's `fetchPage` wiring should read `Connection.use conn (Session.statement () stmt)`. Also `ephemeral-pg`'s `renderStartError` returns `Text`, not the `String` its README shows.
 - While implementing EP-3 (2026-07-16): the engine's durable design (expanded lexicographic predicate, FNV-1a fingerprint serialization with pinned goldens, NOT NULL + unique-tie-breaker v1 restrictions, statement-level unprepared API, Haskell-side cursor minting) is distilled in `docs/adr/3-hasql-keyset-engine.md`.
+- While implementing EP-2 (2026-07-16): **anything that runs warp needs `ghc-options: -threaded`** — warp's TimerManager refuses to start on the single-threaded RTS and every request dies with a connection reset (`NoResponseDataReceived`). EP-4's HTTP-conformance milestone and EP-5's example server must set it on their test-suite/executable stanzas. Related gotcha: cabal may fail to relink after a `ghc-options` change (check `+RTS --info` for `rts_thr`; delete the component's `dist-newstyle` dir to force it).
+- While implementing EP-2 (2026-07-16): core (EP-1) had not shipped the `cursorToText`/`cursorFromText` helpers EP-2 assumed; EP-2 M1 added them to `Relay.Pagination.Cursor` next to the type, with the HTTP instances delegating to them. Also, `servant-openapi-hs`'s `addParam` prepends parameters, so the `HasOpenApi (RelayPage …)` instance applies the four params in reverse to document Relay order. EP-2's durable decisions (type-level page sizes, the `RelayPageError` 400 contract, the validation split with the engine, the orphan OpenAPI policy, deterministic artifacts) are distilled in `docs/adr/4-servant-pagination-surface.md`.
 - During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 
