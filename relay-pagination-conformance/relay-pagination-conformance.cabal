@@ -53,21 +53,35 @@ library
     , text              >=2.0  && <2.2
 
 test-suite relay-pagination-conformance-test
-  import:         lang
-  type:           exitcode-stdio-1.0
-  hs-source-dirs: test
-  main-is:        Main.hs
+  import:             lang
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     test
+  main-is:            Main.hs
+
+  -- MultilineStrings: fixture DDL and the multi-row insert (ADR 1)
+  default-extensions: MultilineStrings
   other-modules:
     Broken
     CheckSpec
+    DbFixture
+    DbSpec
+    Generators
     Oracle
     WalkSpec
 
   build-depends:
     , base
     , bytestring
+    , ephemeral-pg
+    , hasql                         >=1.10 && <1.11
+    , hasql-dynamic-statements      >=0.5  && <0.6
+    , quickcheck-instances          >=0.3  && <0.4
     , relay-pagination
     , relay-pagination-conformance
+    , relay-pagination-hasql
     , tasty                         >=1.4  && <1.6
     , tasty-hunit                   >=0.10 && <0.11
+    , tasty-quickcheck              >=0.10 && <0.12
     , text
+    , time                          >=1.12 && <1.15
+    , uuid-types                    >=1.0  && <1.1
