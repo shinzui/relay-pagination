@@ -57,6 +57,7 @@ Use this checklist to track granular steps. Update it at every stopping point.
 
 ## Surprises & Discoveries
 
+- **The toolchain was partially scaffolded by hand after this plan was drafted (2026-07-15 20:00).** The repository now already contains `flake.nix` (based on `github:shinzui/haskell-nix-dev`), `flake.lock`, `nix/haskell.nix`, `nix/treefmt.nix`, `nix/pre-commit.nix`, `fourmolu.yaml`, `process-compose.yaml`, `flake.module.nix.example`, and an updated `.gitignore` — uncommitted in the working tree. Milestone 1 was written assuming an empty repository: treat these existing files as the starting point, verify each against Milestone 1's requirements (adapting rather than overwriting — the user authored them), commit them as part of Milestone 1, and only author the pieces still missing (Justfile, LICENSE, docs/adr/). Where this plan's quoted file contents differ from what exists, the existing files win unless they fail a stated acceptance check; record any consequential differences here.
 - **`openapi-hs` and `servant-openapi-hs` are two separate git repositories, not one.** The MasterPlan's Integration Points section describes "a `source-repository-package` on `https://github.com/shinzui/openapi-hs.git`" as if one repo carried both packages. Inspecting the local checkouts shows otherwise:
 
   ```text

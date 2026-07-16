@@ -179,6 +179,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While authoring EP-2 and EP-1 in parallel (2026-07-15): the two plans initially disagreed on where `FromHttpApiData Cursor` lives (EP-1 said the servant package, EP-2 said core). Reconciled in EP-2's favor — instances belong next to the type to avoid orphans; `http-api-data` is a light dependency. Both plans and Integration Points now state that EP-2's first milestone adds the instances to core.
 - While authoring EP-3 (2026-07-15): `paginate` was refined to return `Either CursorError (Statement …)` instead of a bare `Statement`, so a cursor that cannot decode against the sort spec fails before any SQL runs. Cascaded into EP-4's `fetchViaEngine` wiring and EP-5's API restatements.
 - While authoring EP-3 (2026-07-15): `Hasql.DynamicStatements.Snippet.toSql` exists in hasql-dynamic-statements 0.5.1 (verified in source), which makes pure golden tests of generated SQL possible without a database — the SQL-generation test strategy question resolved itself.
+- After drafting (2026-07-15 20:00): the user hand-scaffolded part of EP-1's Milestone 1 toolchain directly in the working tree (`flake.nix` from `github:shinzui/haskell-nix-dev`, `flake.lock`, `nix/{haskell,treefmt,pre-commit}.nix`, `fourmolu.yaml`, `process-compose.yaml`, `.gitignore` update), uncommitted. EP-1's Surprises section instructs the implementer to adopt and verify these files rather than author them from scratch.
 
 
 ## Decision Log
