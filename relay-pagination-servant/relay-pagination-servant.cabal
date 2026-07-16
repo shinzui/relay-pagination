@@ -1,0 +1,51 @@
+cabal-version: 3.0
+name:          relay-pagination-servant
+version:       0.1.0.0
+synopsis:
+  Servant combinator for Relay-style cursor pagination (stub until EP-2)
+
+description:
+  Will provide the RelayPage servant combinator with server, client, link and
+  OpenAPI 3.1 support. This package is a compilable stub; the implementation
+  is delivered by ExecPlan 2.
+
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Nadeem Bitar
+maintainer:    Nadeem Bitar
+category:      Web, Servant
+build-type:    Simple
+
+source-repository head
+  type:     git
+  location: https://github.com/shinzui/relay-pagination
+
+common warnings
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wunused-packages
+
+common lang
+  import:             warnings
+  default-language:   GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    OverloadedLabels
+    OverloadedStrings
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules: Relay.Pagination.Servant
+  build-depends:
+    , base              >=4.21   && <5
+    , relay-pagination
+    , servant           >=0.20.3 && <0.21
+
+test-suite relay-pagination-servant-test
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  build-depends:  base

@@ -1,0 +1,53 @@
+cabal-version: 3.0
+name:          relay-pagination-hasql
+version:       0.1.0.0
+synopsis:
+  Hasql keyset-pagination engine for Relay-style cursors (stub until EP-3)
+
+description:
+  Will provide the keyset-pagination engine: declarative sort specifications,
+  typed cursor key codecs, and a paginate function that wraps a base hasql
+  snippet with keyset WHERE/ORDER BY/LIMIT clauses and assembles a Connection.
+  This package is a compilable stub; the implementation is delivered by
+  ExecPlan 3.
+
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Nadeem Bitar
+maintainer:    Nadeem Bitar
+category:      Database, Web
+build-type:    Simple
+
+source-repository head
+  type:     git
+  location: https://github.com/shinzui/relay-pagination
+
+common warnings
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wunused-packages
+
+common lang
+  import:             warnings
+  default-language:   GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    OverloadedLabels
+    OverloadedStrings
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules: Relay.Pagination.Hasql
+  build-depends:
+    , base              >=4.21   && <5
+    , hasql             >=1.10.3 && <1.11
+    , relay-pagination
+
+test-suite relay-pagination-hasql-test
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  build-depends:  base

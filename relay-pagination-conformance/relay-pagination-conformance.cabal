@@ -1,0 +1,52 @@
+cabal-version: 3.0
+name:          relay-pagination-conformance
+version:       0.1.0.0
+synopsis:
+  Conformance walker proving no-skip/no-duplicate pagination (stub until EP-4)
+
+description:
+  Will provide the conformance walker that services run against their own
+  paginated endpoints to prove no-skip/no-duplicate behavior. It fetches
+  pages through a plain callback, so it stays decoupled from any session
+  runner or HTTP client. This package is a compilable stub; the
+  implementation is delivered by ExecPlan 4.
+
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Nadeem Bitar
+maintainer:    Nadeem Bitar
+category:      Testing, Web
+build-type:    Simple
+
+source-repository head
+  type:     git
+  location: https://github.com/shinzui/relay-pagination
+
+common warnings
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wunused-packages
+
+common lang
+  import:             warnings
+  default-language:   GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    OverloadedLabels
+    OverloadedStrings
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules: Relay.Pagination.Conformance
+  build-depends:
+    , base              >=4.21 && <5
+    , relay-pagination
+
+test-suite relay-pagination-conformance-test
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+  build-depends:  base

@@ -40,10 +40,10 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - [x] M1: flake.nix, nix/haskell.nix, nix/treefmt.nix, nix/pre-commit.nix written; `nix develop` enters a shell with GHC 9.12.4 (2026-07-16: adopted the seihou `nix-haskell-flake` scaffold already committed in e997197; verified GHC 9.12.4)
 - [x] M1: fourmolu.yaml, Justfile, root LICENSE, .gitignore additions written; `just --list` and `nix fmt` work (2026-07-16: fourmolu.yaml/.gitignore came from the scaffold; authored Justfile + LICENSE; no docs/adr/.gitkeep needed — docs/adr/1-haskell-language-and-api-conventions.md already tracks the directory)
 - [x] M1 committed (`chore(scaffold): ...`) (2026-07-16)
-- [ ] M2: cabal.project with the four packages and the two openapi pins
-- [ ] M2: relay-pagination package skeleton (cabal file, empty-ish modules, test Main) compiles
-- [ ] M2: relay-pagination-servant, -hasql, -conformance stubs compile with real dependency bounds (servant 0.20.3, hasql 1.10.3)
-- [ ] M2: `cabal build all` and `cabal test all` pass; committed (`feat: ...`)
+- [x] M2: cabal.project with the four packages and the two openapi pins (2026-07-16)
+- [x] M2: relay-pagination package skeleton (cabal file, empty-ish modules, test Main) compiles (2026-07-16)
+- [x] M2: relay-pagination-servant, -hasql, -conformance stubs compile with real dependency bounds (servant 0.20.3, hasql 1.10.3) (2026-07-16: solver picked servant 0.20.3.0, hasql 1.10.3.5; `cabal build openapi-hs servant-openapi-hs` completes both 4.1.0 pins; `cabal freeze --dry-run` shows no openapi3)
+- [x] M2: `cabal build all` and `cabal test all` pass; committed (`feat: ...`) (2026-07-16)
 - [ ] M3: Cursor, KeyValue, CursorPayload types with exact JSON instances in Relay.Pagination.Cursor
 - [ ] M3: Connection, Edge, PageInfo with Relay-shaped JSON in Relay.Pagination.Connection; facade module re-exports
 - [ ] M3: KeyValue JSON golden tests + Connection JSON golden test pass; committed
