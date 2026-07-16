@@ -50,7 +50,7 @@ Alternatives considered: folding the servant surface into the core package (reje
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Scaffold the repository and the relay-pagination core package | docs/plans/1-scaffold-the-repository-and-the-relay-pagination-core-package.md | None | None | In Progress |
+| 1 | Scaffold the repository and the relay-pagination core package | docs/plans/1-scaffold-the-repository-and-the-relay-pagination-core-package.md | None | None | Complete |
 | 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | Not Started |
 | 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | Not Started |
 | 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | Not Started |
@@ -149,11 +149,11 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 
 ## Progress
 
-- [ ] EP-1 M1: Repository toolchain — nix flake, fourmolu, Justfile, BSD-3 LICENSE, docs/adr/
-- [ ] EP-1 M2: cabal.project with four compilable packages and the two openapi-hs pins
-- [ ] EP-1 M3: Core wire types with Relay-shaped JSON, byte-stable golden tests
-- [ ] EP-1 M4: Cursor codec — version + fingerprint, property round-trips, golden wire strings
-- [ ] EP-1 M5: mkPageRequest validation matrix, first ADR, acceptance sweep
+- [x] EP-1 M1: Repository toolchain — nix flake, fourmolu, Justfile, BSD-3 LICENSE, docs/adr/ (2026-07-16)
+- [x] EP-1 M2: cabal.project with four compilable packages and the two openapi-hs pins (2026-07-16)
+- [x] EP-1 M3: Core wire types with Relay-shaped JSON, byte-stable golden tests (2026-07-16)
+- [x] EP-1 M4: Cursor codec — version + fingerprint, property round-trips, golden wire strings (2026-07-16)
+- [x] EP-1 M5: mkPageRequest validation matrix, wire-format ADR, acceptance sweep (2026-07-16)
 - [ ] EP-2 M1: Cursor FromHttpApiData/ToHttpApiData in core; relay-pagination-servant skeleton
 - [ ] EP-2 M2: RelayPage HasServer plus exported 400 envelope; NamedRoutes/MultiVerb toy API with manual AsUnion
 - [ ] EP-2 M3: ClientPage, HasClient, HasLink; typed 200/400 round-trip against warp
@@ -186,6 +186,9 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While authoring EP-3 (2026-07-15): `paginate` was refined to return `Either CursorError (Statement …)` instead of a bare `Statement`, so a cursor that cannot decode against the sort spec fails before any SQL runs. Cascaded into EP-4's `fetchViaEngine` wiring and EP-5's API restatements.
 - While authoring EP-3 (2026-07-15): `Hasql.DynamicStatements.Snippet.toSql` exists in hasql-dynamic-statements 0.5.1 (verified in source), which makes pure golden tests of generated SQL possible without a database — the SQL-generation test strategy question resolved itself.
 - After drafting (2026-07-15 20:00): the user hand-scaffolded part of EP-1's Milestone 1 toolchain directly in the working tree (`flake.nix` from `github:shinzui/haskell-nix-dev`, `flake.lock`, `nix/{haskell,treefmt,pre-commit}.nix`, `fourmolu.yaml`, `process-compose.yaml`, `.gitignore` update), uncommitted. EP-1's Surprises section instructs the implementer to adopt and verify these files rather than author them from scratch.
+- While implementing EP-1 (2026-07-16): the cursor wire-format ADR is `docs/adr/2-cursor-wire-format.md`, not `1-…` — `docs/adr/1-haskell-language-and-api-conventions.md` already occupied number 1 when EP-1 ran. Only EP-1's own text used the old number; EP-2..EP-5 do not reference it by path.
+- While implementing EP-1 (2026-07-16): **GHC2024 does not include `BlockArguments`** (it adds DataKinds, DerivingStrategies, DisambiguateRecordFields, ExplicitNamespaces, GADTs, LambdaCase, MonoLocalBinds, RoleAnnotations over GHC2021), but plan-quoted code across the initiative uses block-argument lambdas (`Aeson.withObject "..." \o -> ...`). EP-1 scoped `{-# LANGUAGE BlockArguments #-}` pragmas to the modules that need them, per ADR-1's additional-extensions rule. EP-2..EP-5 implementers should expect the same for any quoted code in that style.
+- While implementing EP-1 (2026-07-16): the seihou `nix-haskell-flake` scaffold (committed in e997197) differs benignly from EP-1's quoted files — treefmt runs `cabal-fmt` (not cabal-gild), and `nix/haskell.nix` adds a persistent dev-Postgres shell hook plus a `packages.default = callCabal2nix … inputs.self` that assumes a single root .cabal file and will not build this multi-package project (dev shell and `nix fmt` are unaffected; extend via `flake.module.nix` if `nix build` is ever needed). The treefmt pre-commit hook actively reformats freshly written Haskell/cabal files on first commit — plan for a "commit, hook formats, re-add, commit" loop.
 - During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 

@@ -51,8 +51,8 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - [x] M4: property round-trip, wire-format golden tests (encode and decode directions), and error-case tests pass; committed (2026-07-16: 22 tests green, kitchen-sink and small goldens byte-exact in both directions)
 - [x] M5: Direction, PageConfig, PageRequest, PageRequestError, mkPageRequest implemented (2026-07-16)
 - [x] M5: full validation-matrix unit tests pass; committed (2026-07-16: all 18 matrix cases green; stub aliases restored to final forms; 40 tests total)
-- [ ] Final acceptance: `just fmt` clean, `cabal build all` + `cabal test all` pass from scratch, GHCi demo transcript captured in this plan
-- [ ] ADR distillation: docs/adr/1-cursor-wire-format.md written; MasterPlan registry row for EP-1 set to Complete
+- [x] Final acceptance: `just fmt` clean, `cabal build all` + `cabal test all` pass from scratch (dist-newstyle removed), GHCi demo transcript captured in this plan (2026-07-16)
+- [x] ADR distillation: docs/adr/2-cursor-wire-format.md written (renumbered — see Surprises); MasterPlan registry row for EP-1 set to Complete (2026-07-16)
 
 
 ## Surprises & Discoveries
@@ -142,7 +142,16 @@ Use this checklist to track granular steps. Update it at every stopping point.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation. Before marking this plan complete, distill the wire-format and toolchain decisions into `docs/adr/` — at minimum an ADR pinning the cursor wire format and KeyValue tagging scheme.)
+Completed 2026-07-16, in one session, five milestone commits plus a docs commit (M1 `3663046`, M2 `f576052`, M3 `ff3943e`, M4 `30233ed`, M5 `8a27dbb`, closeout follows). Everything the plan promised exists:
+
+- **Toolchain**: `nix develop` gives GHC 9.12.4, cabal, HLS, fourmolu, just, postgresql; `just --list` shows the recipes; `nix fmt` is clean and enforced by the pre-commit hook (which caught and reformatted every milestone commit — the loop is "commit, hook formats, re-add, commit", working as designed).
+- **Four packages** build with `cabal build all`; the two openapi 4.1.0 pins fetch and build (lib + gen-openapi exe), with servant 0.20.3.0 and hasql 1.10.3.5 in the same install plan and no `openapi3` anywhere.
+- **Core package**: 40 tests green — KeyValue/Connection JSON goldens, cursor codec round-trip + fingerprint properties, byte-exact golden encode/decode of both pinned wire strings, typed error cases, and the 18-case mkPageRequest matrix. The GHCi acceptance transcript is captured in Validation and matches the plan's predictions byte for byte.
+- **ADRs**: the wire format is distilled into `docs/adr/2-cursor-wire-format.md` (numbered 2, not the plan text's 1 — ADR 1 already existed).
+
+What deviated from the plan, all recorded in the Decision Log / Surprises: the toolchain arrived pre-committed via seihou (M1 became adopt-and-verify plus Justfile/LICENSE authoring, and the Justfile gained `create-database` to satisfy the scaffold's process-compose wiring); `BlockArguments` needed per-module pragmas because GHC2024 does not include it (the plan's quoted code assumed it did); the test suite's `bytestring`/`text` deps were dropped as genuinely unused; the M3 Connection golden temporarily pinned cursor literals because `encodeCursor` only arrives in M4 (the plan's M3 test listing used it a milestone early).
+
+Lessons for EP-2..EP-5: budget for the treefmt pre-commit hook rewriting freshly written Haskell/cabal files on first commit; check GHC2024's actual extension set before pasting plan-quoted code; and the seihou-managed nix files should be extended via `flake.module.nix`, not edited (in particular `packages.default` assumes a root .cabal file and will need attention if `nix build` is ever wanted).
 
 
 ## Context and Orientation
@@ -1426,6 +1435,15 @@ Left (FingerprintMismatch {expected = 99, actual = 42})
 ```
 
 The single documented one-liner form: `decodeCursor 42 (encodeCursor (CursorPayload 1 42 [KvTimestampMicros 1720000000123456, KvInt 7]))` prints `Right (CursorPayload {version = 1, fingerprint = 42, keys = [KvTimestampMicros 1720000000123456,KvInt 7]})`.
+
+Captured transcript (2026-07-16, `cabal repl relay-pagination -v0` in the dev shell — real output, matches the expectations above exactly):
+
+```text
+Cursor "eyJ2IjoxLCJmIjoxLCJrIjpbeyJ0IjoiaSIsInYiOjd9XX0"
+Right (CursorPayload {version = 1, fingerprint = 1, keys = [KvInt 7]})
+Left (FingerprintMismatch {expected = 99, actual = 42})
+Right (CursorPayload {version = 1, fingerprint = 42, keys = [KvTimestampMicros 1720000000123456,KvInt 7]})
+```
 
 **5. Repo hygiene.** `git log --format=%B -1` shows the trailers on the latest commit; `docs/adr/1-cursor-wire-format.md` exists; the MasterPlan registry marks EP-1 Complete; this plan's Progress checklist is fully ticked and Outcomes & Retrospective is written.
 
