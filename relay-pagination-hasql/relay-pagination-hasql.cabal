@@ -1,6 +1,6 @@
-cabal-version: 3.0
-name:          relay-pagination-hasql
-version:       0.1.0.0
+cabal-version:   3.0
+name:            relay-pagination-hasql
+version:         0.1.0.0
 synopsis:
   Keyset-pagination engine producing Relay connections from hasql queries
 
@@ -10,12 +10,13 @@ description:
   BY/LIMIT clauses with all cursor values as typed SQL parameters, and
   assembly of spec-correct Connection responses.
 
-license:       BSD-3-Clause
-license-file:  LICENSE
-author:        Nadeem Bitar
-maintainer:    Nadeem Bitar
-category:      Database, Web
-build-type:    Simple
+license:         BSD-3-Clause
+license-file:    LICENSE
+author:          Nadeem Bitar
+maintainer:      Nadeem Bitar
+category:        Database, Web
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
 
 source-repository head
   type:     git

@@ -34,8 +34,8 @@ This section must always reflect the actual current state of the work.
 - [x] M2: `docs/guides/implementing-pagination.md` written; every Haskell block machine-verified as a verbatim substring of the compiled example sources (scripted substring check over `examples/members-server/**/*.hs` plus the conformance `Walk` module — 9/9 blocks match); real curl transcript and real golden SQL shape included (2026-07-16)
 - [x] M3: `docs/guides/agent-guide.md` written — steps with rationale, expanded diagnoses, skill copy instructions, ADR pointers (2026-07-16)
 - [x] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written (175 lines) with the plan's exact frontmatter and inlined templates; grep-verified self-contained — no `docs/`, `examples/`, or other repo-relative paths outside the skill directory (2026-07-16)
-- [ ] M4: `README.md` written (positioning, quickstart, package map, guide pointers, release-order note)
-- [ ] M4: Per-package `CHANGELOG.md` files created for all four packages
+- [x] M4: `README.md` written (positioning, status caveat, quickstart machine-verified against the example, package map, badges placeholder comment, guide pointers, release-order section, requirements, license) (2026-07-16)
+- [x] M4: Per-package `CHANGELOG.md` files created for all four packages, each with the PVP pointer and an `0.1.0.0 — unreleased` section; `extra-doc-files: CHANGELOG.md` added to all four `.cabal` files (2026-07-16)
 - [ ] M5: Haddock pass — every exported symbol across the four packages documented; `cabal haddock all` clean; `just haddock` recipe added
 - [ ] M6: `mori.dhall` written at the repo root; `mori show --full` displays the registered identity; `mori registry search relay-pagination` finds it
 - [ ] M7: `cabal check` clean for all four packages; version bounds on all dependencies; release-order implications documented in README and here

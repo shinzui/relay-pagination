@@ -1,6 +1,6 @@
-cabal-version: 3.0
-name:          relay-pagination
-version:       0.1.0.0
+cabal-version:   3.0
+name:            relay-pagination
+version:         0.1.0.0
 synopsis:
   Relay-style cursor pagination wire types and opaque cursor codec
 
@@ -10,12 +10,13 @@ description:
   first/after/last/before request validation, and a versioned, fingerprinted,
   base64url-encoded opaque cursor with an exact, golden-tested wire format.
 
-license:       BSD-3-Clause
-license-file:  LICENSE
-author:        Nadeem Bitar
-maintainer:    Nadeem Bitar
-category:      Web, Database
-build-type:    Simple
+license:         BSD-3-Clause
+license-file:    LICENSE
+author:          Nadeem Bitar
+maintainer:      Nadeem Bitar
+category:        Web, Database
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
 
 source-repository head
   type:     git
