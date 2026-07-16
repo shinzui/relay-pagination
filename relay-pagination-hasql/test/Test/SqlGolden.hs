@@ -24,7 +24,8 @@ import Relay.Pagination
     PageRequest (..),
     encodeCursor,
   )
-import Relay.Pagination.Hasql.KeyCodec (textKey, timestamptzKey)
+import Relay.Pagination.Hasql.Connection (mintCursor)
+import Relay.Pagination.Hasql.KeyCodec (microsToUtcTime, textKey, timestamptzKey)
 import Relay.Pagination.Hasql.SortSpec (KeyColumn (..), SortDirection (..), SortSpec (..), sortSpecFingerprint)
 import Relay.Pagination.Hasql.Sql (paginateSnippet)
 import Test.Tasty
@@ -113,9 +114,11 @@ propertyBase = Snippet.sql "SELECT property_id FROM properties"
 ts :: Int64
 ts = 1767323045123456
 
+-- | A real cursor minted off a fixture row (equivalent to
+-- @encodeCursor (CursorPayload 1 fp [KvTimestampMicros ts, KvText "i05"])@).
 membersCursor :: Cursor
 membersCursor =
-  encodeCursor (CursorPayload 1 (sortSpecFingerprint memberishSpec) [KvTimestampMicros ts, KvText "i05"])
+  mintCursor memberishSpec Item {itemId = "i05", itemUpdatedAt = microsToUtcTime ts}
 
 propertyCursor :: Cursor
 propertyCursor =

@@ -7,7 +7,7 @@ module Test.Connection (tests) where
 
 import Data.Int (Int64)
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, listToMaybe)
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Relay.Pagination
@@ -75,8 +75,9 @@ tests =
       testCase "start/end cursors are the first/last edge's" do
         let conn = mk Forward Nothing [a, b, c, d]
             cursorsOf = [cur | Edge {cursor = cur} <- edges conn]
-        startCursor (pageInfo conn) @?= Just (head cursorsOf)
-        endCursor (pageInfo conn) @?= Just (last cursorsOf)
+        length cursorsOf @?= 3
+        startCursor (pageInfo conn) @?= listToMaybe cursorsOf
+        endCursor (pageInfo conn) @?= listToMaybe (reverse cursorsOf)
     ]
   where
     mk dir mc rows =
@@ -105,9 +106,11 @@ spec =
     )
 
 someCursor :: Cursor
-someCursor = head [cur | Edge {cursor = cur} <- edges (mkOne)]
+someCursor = case edges one of
+  Edge {cursor = cur} : _ -> cur
+  [] -> error "someCursor: no edges"
   where
-    mkOne =
+    one =
       mkConnection
         spec
         PageRequest {pageSize = 1, direction = Forward, cursor = Nothing}
