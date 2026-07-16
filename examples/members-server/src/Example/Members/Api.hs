@@ -59,11 +59,13 @@ type ListMembersEndpoint =
     :> RelayPage 3 50
     :> MultiVerb 'GET '[JSON] MemberPageResponses MemberPageResult
 
+-- | The members domain's routes.
 data MemberRoutes mode = MemberRoutes
   { listMembers :: mode :- ListMembersEndpoint
   }
   deriving stock (Generic)
 
+-- | The whole app: the members routes plus the served OpenAPI document.
 data AppRoutes mode = AppRoutes
   { members :: mode :- NamedRoutes MemberRoutes,
     openapi ::

@@ -36,7 +36,7 @@ This section must always reflect the actual current state of the work.
 - [x] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written (175 lines) with the plan's exact frontmatter and inlined templates; grep-verified self-contained — no `docs/`, `examples/`, or other repo-relative paths outside the skill directory (2026-07-16)
 - [x] M4: `README.md` written (positioning, status caveat, quickstart machine-verified against the example, package map, badges placeholder comment, guide pointers, release-order section, requirements, license) (2026-07-16)
 - [x] M4: Per-package `CHANGELOG.md` files created for all four packages, each with the PVP pointer and an `0.1.0.0 — unreleased` section; `extra-doc-files: CHANGELOG.md` added to all four `.cabal` files (2026-07-16)
-- [ ] M5: Haddock pass — every exported symbol across the four packages documented; `cabal haddock all` clean; `just haddock` recipe added
+- [x] M5: Haddock pass — `just haddock` (recipe already existed from EP-1) reports 100% for every public module of the four released packages *and* the example. EP-1..4 had already documented nearly everything; the pass needed exactly one library fix (`conformancePassed` in `Relay.Pagination.Conformance.Check`) plus five example-module haddocks. Remaining haddock output is link-ambiguity warnings only, no errors (2026-07-16)
 - [ ] M6: `mori.dhall` written at the repo root; `mori show --full` displays the registered identity; `mori registry search relay-pagination` finds it
 - [ ] M7: `cabal check` clean for all four packages; version bounds on all dependencies; release-order implications documented in README and here
 - [ ] Final: ADR distillation pass into `docs/adr/`; MasterPlan registry row for EP-5 set to Complete; Outcomes & Retrospective written

@@ -49,6 +49,7 @@ baseQuery =
     FROM members
     """
 
+-- | One column per selected column, in the base query's select-list order.
 memberRowDecoder :: Decoders.Row Member
 memberRowDecoder =
   Member

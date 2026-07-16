@@ -52,6 +52,7 @@ cursorRejected PageRequest {direction} cursorError =
       parameter = Just (case direction of Forward -> "after"; Backward -> "before")
     }
 
+-- | Handlers for every route in 'AppRoutes'.
 appServer :: HasqlConn.Connection -> AppRoutes (AsServerT Handler)
 appServer conn =
   AppRoutes

@@ -113,6 +113,7 @@ data ConformanceReport = ConformanceReport
   }
   deriving stock (Eq, Show)
 
+-- | True iff the report contains no violations.
 conformancePassed :: ConformanceReport -> Bool
 conformancePassed report = null (violations report)
 

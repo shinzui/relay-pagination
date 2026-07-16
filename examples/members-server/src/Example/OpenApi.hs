@@ -36,6 +36,8 @@ instance ToSchema OpenApi where
         & OpenApi.type_ ?~ OpenApi.OpenApiTypeSingle OpenApi.OpenApiObject
         & OpenApi.description ?~ "An OpenAPI 3.1 document."
 
+-- | The document, derived from 'appApi' and enriched with title, version,
+-- description, server, and stable operation ids.
 membersOpenApi :: OpenApi
 membersOpenApi =
   toOpenApi appApi
