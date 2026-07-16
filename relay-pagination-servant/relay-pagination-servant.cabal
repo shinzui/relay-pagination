@@ -44,16 +44,42 @@ library
     Relay.Pagination.Servant.OpenApi
 
   build-depends:
+    , aeson             >=2.2    && <2.3
     , base              >=4.21   && <5
+    , http-api-data     >=0.6    && <0.7
+    , http-types        >=0.12   && <0.13
     , relay-pagination
     , servant           >=0.20.3 && <0.21
+    , servant-server    >=0.20.3 && <0.21
+    , text              >=2.0    && <2.2
+    , wai               >=3.2    && <3.3
 
 test-suite relay-pagination-servant-test
   import:         lang
   type:           exitcode-stdio-1.0
-  hs-source-dirs: test
+  hs-source-dirs: test demo
   main-is:        Main.hs
-  build-depends:  base
+  other-modules:  ToyApi
+
+  -- warp requires the threaded RTS (its TimerManager will not start without it)
+  ghc-options:    -threaded
+  build-depends:
+    , aeson
+    , base
+    , bytestring
+    , http-api-data
+    , http-client               >=0.7  && <0.8
+    , http-types
+    , relay-pagination
+    , relay-pagination-servant
+    , servant
+    , servant-server
+    , sop-core                  >=0.5  && <0.6
+    , tasty                     >=1.4  && <1.6
+    , tasty-hunit               >=0.10 && <0.11
+    , text
+    , wai
+    , warp                      >=3.3  && <3.5
 
 executable relay-demo
   import:         lang

@@ -71,10 +71,10 @@ This section must always reflect the actual current state of the work.
 
 - [x] M1: `FromHttpApiData`/`ToHttpApiData` instances for `Cursor` added to the core `relay-pagination` package (with `http-api-data` added to its build-depends) and unit-tested for round-trip and bad-input rejection. Core lacked the assumed `cursorToText`/`cursorFromText` helpers, so M1 added them to `Relay.Pagination.Cursor` (see Decision Log). (2026-07-16)
 - [x] M1: `relay-pagination-servant` package skeleton exists (cabal file with library, test suite, and both demo executables; placeholder modules), was already listed in `cabal.project` by EP-1, and `cabal build relay-pagination-servant` succeeds. (2026-07-16)
-- [ ] M2: `RelayPage` type and its `HasServer` instance implemented in `relay-pagination-servant/src/Relay/Pagination/Servant.hs`.
-- [ ] M2: exported `RelayPageError` JSON body (`code`, `message`, `retryable`, optional `parameter`) produced for all invalid-request classes; error mapping documented in haddocks.
-- [ ] M2: `ToyRoutes mode` uses `NamedRoutes` and terminal `MultiVerb`; its two-alternative result has a hand-written `AsUnion` instance.
-- [ ] M2: warp/http-client server tests pass: 200 happy path, default page size and `first=0` accepted, typed 400 on garbage cursor, `first`+`last`, negative size, and size above max.
+- [x] M2: `RelayPage` type and its `HasServer` instance implemented in `relay-pagination-servant/src/Relay/Pagination/Servant.hs`. (2026-07-16)
+- [x] M2: exported `RelayPageError` JSON body (`code`, `message`, `retryable`, optional `parameter`) produced for all invalid-request classes; error mapping documented in haddocks. (2026-07-16)
+- [x] M2: `ToyRoutes mode` uses `NamedRoutes` and terminal `MultiVerb`; its two-alternative result has a hand-written `AsUnion` instance. Lives in `demo/ToyApi.hs` from the start (shared by tests now, demo/generator later) instead of being moved there in M4. (2026-07-16)
+- [x] M2: warp/http-client server tests pass: 200 happy path, default page size and `first=0` accepted, typed 400 on garbage cursor, `first`+`last`, negative size, and size above max — all eight green over real HTTP. (2026-07-16)
 - [ ] M3: `ClientPage` record with smart constructors; `HasClient` and `HasLink` instances implemented.
 - [ ] M3: `genericClient` typed 200/400 round-trip passes against the named warp server; `safeLink` unit test renders expected query strings.
 - [ ] M4: `Relay.Pagination.Servant.OpenApi` module with `HasOpenApi (RelayPage d m :> sub)` and confined `ToSchema`/`ToParamSchema` instances for `Cursor`, `RelayPageError`, `PageInfo`, `Edge a`, `Connection a`.
@@ -90,7 +90,10 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- While implementing M2 (2026-07-16): **warp requires the threaded RTS.** Without `ghc-options: -threaded` on the test suite, every warp request died with `GHC.Internal.Event.Thread.getSystemTimerManager: the TimerManager requires linking against the threaded runtime` and http-client saw `NoResponseDataReceived` / connection reset. The test suite (and any executable that runs warp, i.e. `relay-demo`) needs `-threaded`.
+- While implementing M2 (2026-07-16): after adding `-threaded` to the cabal stanza, `cabal build` claimed to rebuild the test suite but relinked nothing — the binary still reported `("RTS way", "rts_v")` via `+RTS --info`. Deleting the component's `dist-newstyle/.../t/` directory forced a real relink (`rts_thr`). If a cabal-level `ghc-options` change seems to have no effect, check the binary's RTS way and nuke the component build dir.
+- While implementing M2 (2026-07-16): GHC2024 does not include `TypeFamilies`; the `HasServer` associated-type instance needs a module-scoped `{-# LANGUAGE TypeFamilies #-}` in `Relay.Pagination.Servant` (consistent with ADR-1's additional-extensions rule, like `BlockArguments` in EP-1).
+- While implementing M2 (2026-07-16): the plan's demo cursor `Cursor "edge-1"` predates EP-1's wire-bytes representation decision — as wire bytes it would serialize as `"edge-1"`, not the transcript's `"ZWRnZS0x"`. The toy server mints `Cursor "ZWRnZS0x"` (base64url of `edge-1`) so the curl transcript's expected bytes stay right.
 
 
 ## Decision Log
