@@ -44,9 +44,9 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - [x] M2: relay-pagination package skeleton (cabal file, empty-ish modules, test Main) compiles (2026-07-16)
 - [x] M2: relay-pagination-servant, -hasql, -conformance stubs compile with real dependency bounds (servant 0.20.3, hasql 1.10.3) (2026-07-16: solver picked servant 0.20.3.0, hasql 1.10.3.5; `cabal build openapi-hs servant-openapi-hs` completes both 4.1.0 pins; `cabal freeze --dry-run` shows no openapi3)
 - [x] M2: `cabal build all` and `cabal test all` pass; committed (`feat: ...`) (2026-07-16)
-- [ ] M3: Cursor, KeyValue, CursorPayload types with exact JSON instances in Relay.Pagination.Cursor
-- [ ] M3: Connection, Edge, PageInfo with Relay-shaped JSON in Relay.Pagination.Connection; facade module re-exports
-- [ ] M3: KeyValue JSON golden tests + Connection JSON golden test pass; committed
+- [x] M3: Cursor, KeyValue, CursorPayload types with exact JSON instances in Relay.Pagination.Cursor (2026-07-16)
+- [x] M3: Connection, Edge, PageInfo with Relay-shaped JSON in Relay.Pagination.Connection; facade module re-exports (2026-07-16)
+- [x] M3: KeyValue JSON golden tests + Connection JSON golden test pass; committed (2026-07-16: 13 tests green; Connection golden pins the wire bytes as literals until encodeCursor lands in M4)
 - [ ] M4: encodeCursor/decodeCursor + CursorError implemented
 - [ ] M4: property round-trip, wire-format golden tests (encode and decode directions), and error-case tests pass; committed
 - [ ] M5: Direction, PageConfig, PageRequest, PageRequestError, mkPageRequest implemented
@@ -122,6 +122,10 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - Decision: Do not add a custom `Relay.Pagination.Prelude`, `lens`, or `generic-lens` in v1; use explicit, postpositive-qualified imports, ordinary field selection for reads, and record construction for new project-owned values, with no record update syntax on project-owned records. A focused third-party configuration update remains allowed when it is the dependency's documented API.
   Rationale: The custom-prelude and generic-lens patterns in `haskell-jitsurei` target applications with pervasive shared imports and updates. This package family consists of small public libraries with distinct dependency budgets; adding those dependencies solely for internal access would weaken the dependency-light core constraint. `docs/adr/1-haskell-language-and-api-conventions.md` records this scoped exception and its revisit condition.
   Date: 2026-07-15
+
+- Decision: `BlockArguments` is enabled per-module (`{-# LANGUAGE BlockArguments #-}` in `Relay.Pagination.Cursor`, `Relay.Pagination.Connection`, and the core test `Main`) rather than added to the shared baseline.
+  Rationale: The plan's quoted code uses block-argument lambdas (`Aeson.withObject "..." \o -> ...`), but GHC2024 does not include `BlockArguments` (it adds DataKinds, DerivingStrategies, DisambiguateRecordFields, ExplicitNamespaces, GADTs, LambdaCase, MonoLocalBinds, RoleAnnotations over GHC2021). Scoping it to the modules that use it follows the ADR-1 rule that additional extensions are enabled only where their use is documented.
+  Date: 2026-07-16
 
 - Decision: Keep the seihou-scaffolded toolchain files exactly as generated (cabal-fmt formatter, persistent dev-Postgres shell hook, `packages.default` via callCabal2nix) instead of rewriting them to this plan's quoted contents, and add a `create-database` recipe to the Justfile so `process-compose.yaml`'s `create_schema` process works.
   Rationale: The plan states existing user-authored files win unless they fail a stated acceptance check; all M1 checks pass. The Justfile addition repairs the one dangling reference the scaffold makes (`just create-database`).

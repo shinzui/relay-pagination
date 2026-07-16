@@ -6,8 +6,8 @@ module Relay.Pagination.Servant
   )
 where
 
+import Relay.Pagination (Connection)
 import Servant.API (Get, JSON)
 
 -- | The response shape EP-2's @RelayPage@ combinator will produce.
--- (Wraps in @Connection@ from Milestone 3 onward.)
-type RelayPageStub payload = Get '[JSON] payload
+type RelayPageStub payload = Get '[JSON] (Connection payload)
