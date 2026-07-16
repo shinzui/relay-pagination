@@ -52,7 +52,7 @@ Alternatives considered: folding the servant surface into the core package (reje
 |---|-------|------|-----------|-----------|--------|
 | 1 | Scaffold the repository and the relay-pagination core package | docs/plans/1-scaffold-the-repository-and-the-relay-pagination-core-package.md | None | None | Complete |
 | 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | Not Started |
-| 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | In Progress |
+| 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | Complete |
 | 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | Not Started |
 | 5 | Guides for developers and agents, examples, and release readiness | docs/plans/5-guides-for-developers-and-agents-examples-and-release-readiness.md | EP-2, EP-3, EP-4 | None | Not Started |
 
@@ -159,11 +159,11 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [ ] EP-2 M3: ClientPage, HasClient, HasLink; typed 200/400 round-trip against warp
 - [ ] EP-2 M4: Type-derived OpenAPI 3.1, deterministic generator, schema/response/path tests, checked artifact
 - [ ] EP-2 M5: Demo executable, curl transcript, polish, closeout
-- [ ] EP-3 M1: relay-pagination-hasql skeleton, ephemeral-pg pin
-- [ ] EP-3 M2: KeyCodec built-ins, existential KeyColumn/SortSpec, FNV-1a fingerprint goldens
-- [ ] EP-3 M3: Keyset WHERE/ORDER BY/LIMIT n+1 snippet generation, six golden SQL files
-- [ ] EP-3 M4: Connection assembly and public paginate; exact-boundary hasNextPage regression (pure)
-- [ ] EP-3 M5: ephemeral-pg integration — adversarial 25-row fixture walked both directions, demo transcript
+- [x] EP-3 M1: relay-pagination-hasql skeleton, ephemeral-pg pin (2026-07-16)
+- [x] EP-3 M2: KeyCodec built-ins, existential KeyColumn/SortSpec, FNV-1a fingerprint goldens (2026-07-16)
+- [x] EP-3 M3: Keyset WHERE/ORDER BY/LIMIT n+1 snippet generation, six golden SQL files (2026-07-16)
+- [x] EP-3 M4: Connection assembly and public paginate; exact-boundary hasNextPage regression (pure) (2026-07-16)
+- [x] EP-3 M5: ephemeral-pg integration — adversarial 25-row fixture walked both directions, demo transcript (2026-07-16)
 - [ ] EP-4 M1: relay-pagination-conformance skeleton
 - [ ] EP-4 M2: Walker with loop detection + in-memory oracle
 - [ ] EP-4 M3: Invariant checker, report, and proof of teeth (three broken paginators fail)
@@ -189,6 +189,8 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While implementing EP-1 (2026-07-16): the cursor wire-format ADR is `docs/adr/2-cursor-wire-format.md`, not `1-…` — `docs/adr/1-haskell-language-and-api-conventions.md` already occupied number 1 when EP-1 ran. Only EP-1's own text used the old number; EP-2..EP-5 do not reference it by path.
 - While implementing EP-1 (2026-07-16): **GHC2024 does not include `BlockArguments`** (it adds DataKinds, DerivingStrategies, DisambiguateRecordFields, ExplicitNamespaces, GADTs, LambdaCase, MonoLocalBinds, RoleAnnotations over GHC2021), but plan-quoted code across the initiative uses block-argument lambdas (`Aeson.withObject "..." \o -> ...`). EP-1 scoped `{-# LANGUAGE BlockArguments #-}` pragmas to the modules that need them, per ADR-1's additional-extensions rule. EP-2..EP-5 implementers should expect the same for any quoted code in that style.
 - While implementing EP-1 (2026-07-16): the seihou `nix-haskell-flake` scaffold (committed in e997197) differs benignly from EP-1's quoted files — treefmt runs `cabal-fmt` (not cabal-gild), and `nix/haskell.nix` adds a persistent dev-Postgres shell hook plus a `packages.default = callCabal2nix … inputs.self` that assumes a single root .cabal file and will not build this multi-package project (dev shell and `nix fmt` are unaffected; extend via `flake.module.nix` if `nix build` is ever needed). The treefmt pre-commit hook actively reformats freshly written Haskell/cabal files on first commit — plan for a "commit, hook formats, re-add, commit" loop.
+- While implementing EP-3 (2026-07-16): **hasql 1.10 runs sessions via `Hasql.Connection.use`** (`Connection -> Session a -> IO (Either SessionError a)`), not the older `Session.run`; multi-statement DDL goes through `Session.script :: Text -> Session ()`. EP-4's `fetchPage` wiring should read `Connection.use conn (Session.statement () stmt)`. Also `ephemeral-pg`'s `renderStartError` returns `Text`, not the `String` its README shows.
+- While implementing EP-3 (2026-07-16): the engine's durable design (expanded lexicographic predicate, FNV-1a fingerprint serialization with pinned goldens, NOT NULL + unique-tie-breaker v1 restrictions, statement-level unprepared API, Haskell-side cursor minting) is distilled in `docs/adr/3-hasql-keyset-engine.md`.
 - During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 

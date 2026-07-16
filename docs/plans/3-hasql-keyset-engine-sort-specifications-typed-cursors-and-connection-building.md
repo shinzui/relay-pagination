@@ -64,9 +64,9 @@ This section must always reflect the actual current state of the work.
 - [x] M3: golden SQL tests for the members-like two-column mixed-direction spec, all four {Forward, Backward} × {cursor, no cursor} cases, plus a single-column spec case (2026-07-16: six golden files generated with --accept and reviewed — all match this plan's pinned SQL exactly, including the parameterized-base $1..$5 renumbering; the three cursor error paths — fingerprint, arity, type — assert exact CursorError values)
 - [x] M4: `Relay.Pagination.Hasql.Connection` with `mintCursor` and `mkConnection`; `Relay.Pagination.Hasql.paginate` composing everything into a `Statement` (2026-07-16: umbrella module replaces EP-1's PaginateStub with the full public API)
 - [x] M4: pure unit tests of `mkConnection` covering probe/no-probe, empty page, backward reversal, and the exact-boundary `hasNextPage` regression (2026-07-16: 8 connection tests green, 28 total)
-- [ ] M5: integration tests against ephemeral-pg — forward walk, backward walk, exact-boundary flags, microsecond-adjacent timestamps, cursor-as-parameter equality round-trip
-- [ ] M5: `demo` function runnable from GHCi showing both walk directions against a seeded table; transcript recorded in this plan
-- [ ] Final: `cabal test relay-pagination-hasql` green; MasterPlan registry status updated; ADR distillation pass done
+- [x] M5: integration tests against ephemeral-pg — forward walk, backward walk, exact-boundary flags, microsecond-adjacent timestamps, cursor-as-parameter equality round-trip (2026-07-16: five tests green in 0.46s against a cached throwaway PostgreSQL)
+- [x] M5: `demo` function runnable from GHCi showing both walk directions against a seeded table; transcript recorded in this plan (2026-07-16: captured in Validation and Acceptance — ids and flags match the plan's prediction)
+- [x] Final: `cabal test relay-pagination-hasql` green (33 tests); MasterPlan registry status updated; ADR distillation pass done (`docs/adr/3-hasql-keyset-engine.md`) (2026-07-16)
 
 
 ## Surprises & Discoveries
@@ -74,7 +74,11 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet. One authoring-time discovery worth recording ahead of implementation:
+- **`Pg.renderStartError` returns `Text`, not `String` (2026-07-16).** The Context and Orientation API sketch (from ephemeral-pg's README) shows `renderStartError :: StartError -> String`; the actual export at pin `215e4ae` is `StartError -> Text`. Adapted with `Text.unpack` at the two call sites.
+- **hasql 1.10 runs sessions via `Hasql.Connection.use`, not `Session.run` (2026-07-16).** `Hasql.Session` in 1.10.3.5 exports only `Session`, `pipeline`, `script`, `statement`, `onLibpqConnection`; the runner moved to `Connection.use :: Connection -> Session a -> IO (Either SessionError a)`, and multi-statement DDL goes through `Session.script :: Text -> Session ()`. The Validation sketch's `Session.run (Session.statement () stmt) conn` is spelled `Connection.use conn (Session.statement () stmt)` in the real API. Relevant to EP-4's session wiring.
+- **All four plan-pinned fingerprint golden values verified independently before implementation (2026-07-16).** A short Python FNV-1a over the specified serialization reproduced 3101933007 / 2542715508 / 3017546679 / 3884902590 exactly; the Haskell implementation then matched on first run.
+
+(One authoring-time discovery recorded ahead of implementation:
 `hasql-dynamic-statements` 0.5.1 exposes `toSql :: Snippet -> Text`, which renders a snippet
 to its final SQL text with `$1, $2, …` placeholders. This makes pure golden tests of the
 generated SQL trivial — no database and no reaching into opaque internals needed. Verified in
@@ -232,7 +236,11 @@ Compare the result against the original purpose. Before marking the plan complet
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+Completed 2026-07-16 in one session, five milestone commits (M1 `ea4cf9c`, M2 `b6fa445`, M3 `7876c66`, M4 `e90b9f0`, M5 `2ffc897`) plus closeout. The package delivers exactly the contracted API — `SortSpec`/`KeyColumn`/`KeyCodec` with five built-ins, `sortSpecFingerprint`, `paginateSnippet`, `mintCursor`, `mkConnection`, and `paginate :: … -> Either CursorError (Statement () (Connection row))` — with 33 tests green: codec round-trip properties (timestamptz microsecond-exact), four pinned fingerprint goldens, six golden SQL files matching this plan byte for byte (including placeholder renumbering over a parameterized base), the three cursor error paths, eight pure connection-assembly tests including the exact-boundary `hasNextPage` regression, and five ephemeral-pg integration tests (forward/backward walks over the adversarial 25-row fixture, beyond-the-end fetch, microsecond-adjacent boundary at pageSize 1, 25-row cursor-parameter exactness). The GHCi demo transcript matched the plan's prediction.
+
+All three reference-implementation bugs are now regression-tested against: float round-trip skips (integration tests 4 and 5), phantom `hasNextPage` on exactly-full final pages (pure + integration), and reversed backward edge order (pure + integration mirror test).
+
+Deviations, all recorded in the Decision Log / Surprises: EP-1's shipped `CursorError` constructor names used as-is; `renderStartError` returns `Text`; hasql 1.10 session running is `Connection.use`/`Session.script`; the pinned ephemeral-pg package's own tests disabled in `cabal.project`. Durable decisions distilled into `docs/adr/3-hasql-keyset-engine.md`. Lesson for EP-4: wire `fetchPage` through `Connection.use conn (Session.statement () stmt)` and expect `paginate`'s `Either CursorError` before any session runs.
 
 
 ## Context and Orientation
@@ -1045,13 +1053,13 @@ page2 <- fetch (PageRequest 5 Forward (endCursor (pageInfo page1)))
 -- and symmetrically Backward from Nothing, then from page's startCursor
 ```
 
-Expected output (ids per the M5 seed; the demo prints node ids and flags):
+Captured output (2026-07-16, real transcript from `cabal repl relay-pagination-hasql:test:relay-pagination-hasql-tests` then `Test.Integration.demo` — ids and flags exactly as this plan predicted):
 
 ```text
-forward page 1:  i01 i02 i03 i04 i05   hasNext=True  hasPrev=False
-forward page 2:  i06 i07 i08 i09 i10   hasNext=True  hasPrev=True
+forward page 1:  i01 i02 i03 i04 i05   hasNext=True hasPrev=False
+forward page 2:  i06 i07 i08 i09 i10   hasNext=True hasPrev=True
 backward page 1: i22 i21 i23 i24 i25   hasNext=False hasPrev=True
-backward page 2: i16 i17 i18 i19 i20   hasNext=True  hasPrev=True
+backward page 2: i16 i17 i18 i19 i20   hasNext=True hasPrev=True
 ```
 
 (Forward starts at the ten-way `i01`–`i10` timestamp tie, proving tie-breaking by `item_id`;
