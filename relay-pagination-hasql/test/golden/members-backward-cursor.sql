@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT member_id, updated_at FROM members) AS rp_base WHERE (updated_at > $1) OR (updated_at = $2 AND member_id < $3) ORDER BY updated_at ASC, member_id DESC LIMIT $4

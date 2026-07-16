@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT member_id, updated_at FROM members) AS rp_base ORDER BY updated_at DESC, member_id ASC LIMIT $1

@@ -64,6 +64,7 @@ test-suite relay-pagination-hasql-tests
   other-modules:
     Test.Codec
     Test.Fingerprint
+    Test.SqlGolden
 
   build-depends:
     , base

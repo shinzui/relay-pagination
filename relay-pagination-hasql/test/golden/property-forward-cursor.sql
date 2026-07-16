@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT property_id FROM properties) AS rp_base WHERE (property_id > $1) ORDER BY property_id ASC LIMIT $2
