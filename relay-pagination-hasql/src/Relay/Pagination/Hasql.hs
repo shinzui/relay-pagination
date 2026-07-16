@@ -6,7 +6,7 @@ module Relay.Pagination.Hasql
 where
 
 import Hasql.Statement (Statement)
+import Relay.Pagination (Connection, PageRequest)
 
 -- | The shape of the statement EP-3's @paginate@ will produce.
--- (Gains @PageRequest ->@ and @Connection@ once Milestones 3-5 land.)
-type PaginateStub row = Statement () row
+type PaginateStub row = PageRequest -> Statement () (Connection row)

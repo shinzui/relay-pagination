@@ -60,11 +60,9 @@ test-suite relay-pagination-test
   build-depends:
     , aeson
     , base
-    , bytestring
     , quickcheck-instances  >=0.3  && <0.4
     , relay-pagination
     , tasty                 >=1.4  && <1.6
     , tasty-hunit           >=0.10 && <0.11
     , tasty-quickcheck      >=0.10 && <0.12
-    , text
     , uuid-types

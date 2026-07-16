@@ -49,8 +49,8 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - [x] M3: KeyValue JSON golden tests + Connection JSON golden test pass; committed (2026-07-16: 13 tests green; Connection golden pins the wire bytes as literals until encodeCursor lands in M4)
 - [x] M4: encodeCursor/decodeCursor + CursorError implemented (2026-07-16)
 - [x] M4: property round-trip, wire-format golden tests (encode and decode directions), and error-case tests pass; committed (2026-07-16: 22 tests green, kitchen-sink and small goldens byte-exact in both directions)
-- [ ] M5: Direction, PageConfig, PageRequest, PageRequestError, mkPageRequest implemented
-- [ ] M5: full validation-matrix unit tests pass; committed
+- [x] M5: Direction, PageConfig, PageRequest, PageRequestError, mkPageRequest implemented (2026-07-16)
+- [x] M5: full validation-matrix unit tests pass; committed (2026-07-16: all 18 matrix cases green; stub aliases restored to final forms; 40 tests total)
 - [ ] Final acceptance: `just fmt` clean, `cabal build all` + `cabal test all` pass from scratch, GHCi demo transcript captured in this plan
 - [ ] ADR distillation: docs/adr/1-cursor-wire-format.md written; MasterPlan registry row for EP-1 set to Complete
 
@@ -122,6 +122,10 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - Decision: Do not add a custom `Relay.Pagination.Prelude`, `lens`, or `generic-lens` in v1; use explicit, postpositive-qualified imports, ordinary field selection for reads, and record construction for new project-owned values, with no record update syntax on project-owned records. A focused third-party configuration update remains allowed when it is the dependency's documented API.
   Rationale: The custom-prelude and generic-lens patterns in `haskell-jitsurei` target applications with pervasive shared imports and updates. This package family consists of small public libraries with distinct dependency budgets; adding those dependencies solely for internal access would weaken the dependency-light core constraint. `docs/adr/1-haskell-language-and-api-conventions.md` records this scoped exception and its revisit condition.
   Date: 2026-07-15
+
+- Decision: The core test suite's build-depends omit `bytestring` and `text` (the plan's quoted stanza listed both).
+  Rationale: The final test Main never imports either package — lazy-ByteString golden literals resolve through `OverloadedStrings` instances that travel with the type, not through a build-depends entry — so `-Wunused-packages` (correctly) flagged both as unused. The library's own dependency list is exactly as planned.
+  Date: 2026-07-16
 
 - Decision: `BlockArguments` is enabled per-module (`{-# LANGUAGE BlockArguments #-}` in `Relay.Pagination.Cursor`, `Relay.Pagination.Connection`, and the core test `Main`) rather than added to the shared baseline.
   Rationale: The plan's quoted code uses block-argument lambdas (`Aeson.withObject "..." \o -> ...`), but GHC2024 does not include `BlockArguments` (it adds DataKinds, DerivingStrategies, DisambiguateRecordFields, ExplicitNamespaces, GADTs, LambdaCase, MonoLocalBinds, RoleAnnotations over GHC2021). Scoping it to the modules that use it follows the ADR-1 rule that additional extensions are enabled only where their use is documented.

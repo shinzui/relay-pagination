@@ -16,7 +16,7 @@ main =
   defaultMain $
     testGroup
       "relay-pagination"
-      [keyValueJsonTests, connectionJsonTests, cursorCodecTests]
+      [keyValueJsonTests, connectionJsonTests, cursorCodecTests, pageRequestTests]
 
 -- * KeyValue JSON shape (M3)
 
@@ -125,6 +125,39 @@ cursorCodecTests =
       \LHsidCI6ImkiLCJ2Ijo0Mn0seyJ0IjoicyIsInYiOiJhYmMifSx7InQiOiJ1IiwidiI6IjBkYzRj\
       \YTJmLTZmNmEtNGYyOC05ZjdmLTNmMmExYjJjM2Q0ZSJ9LHsidCI6ImIiLCJ2Ijp0cnVlfSx7InQi\
       \OiJuIn1dfQ"
+
+-- * mkPageRequest validation matrix (M5)
+
+pageRequestTests :: TestTree
+pageRequestTests =
+  testGroup
+    "mkPageRequest"
+    [ ok "no arguments: forward, default size" Nothing Nothing Nothing Nothing (PageRequest 25 Forward Nothing),
+      ok "first" (Just 10) Nothing Nothing Nothing (PageRequest 10 Forward Nothing),
+      ok "first+after" (Just 10) (Just c) Nothing Nothing (PageRequest 10 Forward (Just c)),
+      ok "after alone: forward, default size" Nothing (Just c) Nothing Nothing (PageRequest 25 Forward (Just c)),
+      ok "last" Nothing Nothing (Just 10) Nothing (PageRequest 10 Backward Nothing),
+      ok "last+before" Nothing Nothing (Just 10) (Just c) (PageRequest 10 Backward (Just c)),
+      ok "before alone: backward, default size" Nothing Nothing Nothing (Just c) (PageRequest 25 Backward (Just c)),
+      ok "zero size is allowed" (Just 0) Nothing Nothing Nothing (PageRequest 0 Forward Nothing),
+      ok "size equal to max is allowed" (Just 100) Nothing Nothing Nothing (PageRequest 100 Forward Nothing),
+      bad "first+last" (Just 1) Nothing (Just 1) Nothing FirstAndLastBothGiven,
+      bad "everything at once: first+last wins" (Just 1) (Just c) (Just 1) (Just c) FirstAndLastBothGiven,
+      bad "after+before" Nothing (Just c) Nothing (Just c) AfterAndBeforeBothGiven,
+      bad "first+before" (Just 1) Nothing Nothing (Just c) FirstWithBefore,
+      bad "last+after" Nothing (Just c) (Just 1) Nothing LastWithAfter,
+      bad "negative first" (Just (-1)) Nothing Nothing Nothing (NegativePageSize (-1)),
+      bad "negative last" Nothing Nothing (Just (-5)) (Just c) (NegativePageSize (-5)),
+      bad "first over max" (Just 101) Nothing Nothing Nothing PageSizeTooLarge {requested = 101, allowedMax = 100},
+      bad "last over max" Nothing Nothing (Just 1000) Nothing PageSizeTooLarge {requested = 1000, allowedMax = 100}
+    ]
+  where
+    cfg = PageConfig {defaultPageSize = 25, maxPageSize = 100}
+    c = encodeCursor (CursorPayload 1 1 [KvInt 7])
+    ok name f a l b expected =
+      testCase name (mkPageRequest cfg f a l b @?= Right expected)
+    bad name f a l b expected =
+      testCase name (mkPageRequest cfg f a l b @?= Left expected)
 
 -- * Generators
 
