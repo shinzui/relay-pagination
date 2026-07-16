@@ -96,6 +96,10 @@ evidence of teeth.
   Rationale: The library is not on Hackage. The local checkout lives at `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg` (the git root; the `.cabal` file is at the repo root), which can be used via an `optional-packages` line during development, but CI needs the git pin.
   Date: 2026-07-15
 
+- Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md` throughout the package and test suite. Use GHC 9.12.4+/GHC2024, the shared Cabal baseline in every component, strict unprefixed records with explicit deriving, postpositive qualified imports, and `MultilineStrings` in database-backed test modules. The HTTP composition test uses a one-field `NamedRoutes` record and a terminal `MultiVerb` result with a hand-written `AsUnion` mapping.
+  Rationale: These are the relevant conventions from `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`, and `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`. M6 is intended as copyable evidence that the packages compose, so a positional/plain-`Get` toy would teach a route and error model that consuming services should not copy.
+  Date: 2026-07-15
+
 
 ## Outcomes & Retrospective
 
@@ -124,8 +128,10 @@ flake, a `cabal.project` enumerating packages `relay-pagination` (core) and
 instructed to distill their durable decisions (cursor wire format, keyset predicate form)
 into ADRs there. Read any ADR whose title mentions cursors, keyset predicates, or PageInfo
 semantics; they are authoritative if they conflict with the restatements below (and if
-they do conflict, record the difference in this plan's Decision Log). At the time of
-authoring, no `docs/adr/` directory exists yet — EP-1 creates it.
+they do conflict, record the difference in this plan's Decision Log).
+`docs/adr/1-haskell-language-and-api-conventions.md` already exists and is relevant to
+every milestone; read it before coding. EP-1 adds the cursor-format ADR and EP-3 may add
+keyset/PageInfo ADRs before this plan starts.
 
 ### Vocabulary
 
@@ -288,13 +294,14 @@ Create directory `relay-pagination-conformance/` at the repository root containi
   `Relay.Pagination.Conformance`, `Relay.Pagination.Conformance.Walk`,
   `Relay.Pagination.Conformance.Check`, `Relay.Pagination.Conformance.Tasty`;
   `build-depends: base, bytestring, containers, text, relay-pagination, tasty, tasty-hunit`.
-  Language `GHC2021`, default extensions matching the other packages' common stanza
-  (copy the stanza from `relay-pagination-hasql.cabal`).
+  Language `GHC2024`, `base >=4.21`, and default extensions matching EP-1's shared
+  baseline (`DeriveAnyClass`, `DuplicateRecordFields`, `OverloadedLabels`,
+  `OverloadedStrings`). Every component imports that common stanza.
 - `test-suite relay-pagination-conformance-test` (type `exitcode-stdio-1.0`,
   `hs-source-dirs: test`, `main-is: Main.hs`) with the library's deps plus
   `relay-pagination-hasql, hasql, ephemeral-pg, tasty-quickcheck, QuickCheck, uuid, time`
   (and, when M6 lands, `relay-pagination-servant, servant-server, servant-client, warp,
-  http-client`).
+  http-client`). Add `MultilineStrings` to this component for fixture DDL and bulk inserts.
 
 Add `relay-pagination-conformance/` to the `packages:` list in `cabal.project`. If
 `cabal.project` does not already carry the ephemeral-pg pin (EP-3 likely added it), add:
@@ -576,6 +583,11 @@ CREATE TABLE conformance_rows (
 );
 ```
 
+Represent this DDL and the generated multi-row insert statement with GHC 9.12
+`MultilineStrings`. Do not assemble multi-line SQL with `unlines`, and do not interpolate
+generated values into the literal: row ids, timestamps, and payloads remain typed hasql
+parameters.
+
 with sort specification `updated_at DESC, row_id ASC` built from EP-3's
 `timestamptzKey`/`uuidKey` built-ins, base query
 `SELECT row_id, updated_at, payload FROM conformance_rows`, and a Haskell row type
@@ -697,15 +709,17 @@ Scope: prove the three packages compose by walking a real HTTP endpoint. Check t
 MasterPlan registry first: if EP-2's status is not Complete, tick this milestone as
 "deferred" in Progress with a dated note and finish the plan without it — do not block.
 
-Define a one-endpoint servant API in the test suite using EP-2's `RelayPage` combinator
-(exact form per EP-2's finished API — the sketch here is indicative and must be adjusted
-to what EP-2 actually shipped): a `GET /rows` returning `Connection TestRow`, whose
-handler runs `paginate testSortSpec` against the ephemeral-pg connection with the
-`PageRequest` the combinator parsed. Boot it with `Network.Wai.Handler.Warp.testWithApplication`
-(picks a free port, cleans up). Derive the client with servant-client; wire `fetchPage` by
+Define a one-endpoint servant API in the test suite using EP-2's `RelayPage` combinator.
+Use a `RowsRoutes mode` record with a field mounted at `/rows`, instantiate it as
+`NamedRoutes RowsRoutes`, and terminate the field with a `MultiVerb` response list
+containing `Respond 200 "Page of rows" (Connection TestRow)` and `Respond 400 "Invalid pagination" RelayPageError`. Define `RowsPageResult = RowsPageOk !(Connection TestRow) | RowsPageBadRequest !RelayPageError` and write its `AsUnion` instance by hand; do not use `GenericAsUnion`. The handler normally constructs `RowsPageOk` after running `paginate testSortSpec` against the ephemeral-pg connection with the `PageRequest` the combinator parsed; pre-handler validation uses the same `RelayPageError` wire shape for the 400 response. Use one `Proxy (NamedRoutes RowsRoutes)` value for `serve` and `genericClient` so the test cannot accidentally serve and call different route types.
+
+Boot it with `Network.Wai.Handler.Warp.testWithApplication`
+(picks a free port, cleans up). Derive the named client with servant-client; wire `fetchPage` by
 translating `PageRequest` back to Relay arguments — `Forward` becomes
 `first = Just pageSize, after = cursor`; `Backward` becomes `last = Just pageSize,
-before = cursor` — and running `runClientM`, failing the test on `Left`. `TestRow` needs
+before = cursor` — and running `runClientM`, failing the test on transport `Left`, on a
+typed `RowsPageBadRequest`, or on any unexpected result. `TestRow` needs
 `ToJSON`/`FromJSON` instances (derive them in the test module). Then run the *same*
 `checkConformance` call as M4's fixed-dataset test, over HTTP.
 
@@ -896,3 +910,6 @@ EP-2's combinator round-trips `first`/`after`/`last`/`before` through servant-cl
 Downstream consumers (EP-5's guides, external services) rely on exactly the library
 surface listed above — any rename requires a Decision Log entry here and a cascade note in
 the MasterPlan's Integration Points.
+
+
+Revision note (2026-07-15): Applied `docs/adr/1-haskell-language-and-api-conventions.md`. Updated the package baseline to GHC 9.12.4+/GHC2024 and `base >=4.21`, required the shared extensions and postpositive qualified imports, specified `MultilineStrings` for parameterized database fixtures, and changed the HTTP composition milestone from a positional plain-`Get` sketch to a `NamedRoutes`/`MultiVerb` API with a manually mapped typed 200/400 result.

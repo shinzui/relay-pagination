@@ -208,6 +208,10 @@ Record every decision made while working on the plan.
   in single-digit seconds.
   Date: 2026-07-15
 
+- Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md` to this package: GHC 9.12.4+/GHC2024, the shared baseline extensions, postpositive qualified imports, explicit strict records and deriving strategies, and `MultilineStrings` in the `lang` stanza for fixture and demonstration SQL. Pattern-match existential `KeyColumn` records with explicit field puns rather than `RecordWildCards`.
+  Rationale: The registered sources `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-record-patterns`, and `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings` are the current project conventions. Multi-line schema, insert, and base-query text is materially easier to audit in native multiline literals; explicit existential patterns make the hidden value type and the fields that keep it in scope visible.
+  Date: 2026-07-15
+
 
 ## Outcomes & Retrospective
 
@@ -517,7 +521,7 @@ and `cabal build relay-pagination-hasql:test:relay-pagination-hasql-tests` succe
 suite runs a trivial passing test.
 
 Create `relay-pagination-hasql/relay-pagination-hasql.cabal`. Model the common stanza,
-GHC2021 defaults, and warning set on the core package's cabal file from EP-1. The essential
+GHC2024 defaults, and warning set on the core package's cabal file from EP-1. The essential
 content:
 
 ```cabal
@@ -530,7 +534,13 @@ author: Nadeem Bitar
 build-type: Simple
 
 common lang
-  default-language: GHC2021
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    MultilineStrings
+    OverloadedLabels
+    OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wredundant-constraints
 
 library
@@ -543,7 +553,7 @@ library
     Relay.Pagination.Hasql.Sql
     Relay.Pagination.Hasql.Connection
   build-depends:
-    base >=4.18 && <5,
+    base >=4.21 && <5,
     bytestring,
     hasql >=1.10 && <1.11,
     hasql-dynamic-statements >=0.5.1 && <0.6,
@@ -637,8 +647,9 @@ Every `fromKeyValue` rejects mismatched constructors — including `KvNull` — 
 
 In `relay-pagination-hasql/src/Relay/Pagination/Hasql/SortSpec.hs` define `SortDirection`,
 `KeyColumn` (an existential record: the `forall v.` hides each column's value type so
-heterogeneous columns live in one list; pattern-matching `KeyColumn {..}` brings `extract`
-and `codec` into scope at a shared, opaque `v` — exactly what minting and decoding need),
+heterogeneous columns live in one list; pattern-matching with explicit field puns such as
+`KeyColumn {extract, codec}` brings those fields into scope at a shared, opaque `v` —
+exactly what minting and decoding need, without enabling `RecordWildCards`),
 `SortSpec`, and:
 
 ```haskell
@@ -687,6 +698,11 @@ discarded by the wrapping subquery anyway, so the haddock must forbid it), a `So
 a `PageRequest`:
 
     SELECT * FROM (<base>) AS rp_base [WHERE <keyset predicate>] ORDER BY <order clause> LIMIT <pageSize+1 as parameter>
+
+Use ordinary string literals for the generator's short punctuation fragments, because it
+must deliberately emit one-line stable SQL. Use GHC 9.12 `MultilineStrings` for human-authored
+multi-line base queries and database fixture DDL in tests and examples; do not use `unlines`,
+string gaps, or a Template Haskell quasiquoter for those literals.
 
 Define the *effective direction* of column i as `sortDir_i` when paging `Forward` and its
 flip when paging `Backward` (Backward flips every comparator and every ASC/DESC — it walks
@@ -846,6 +862,11 @@ CREATE TABLE items (
   updated_at timestamptz NOT NULL
 );
 ```
+
+Embed this DDL and any multi-row seed statement in the Haskell test module with
+`MultilineStrings`, preserving the visible SQL layout shown above. Keep all data values in
+typed hasql parameters; multiline literals improve readability but do not authorize string
+interpolation of test or user values.
 
 Seed data, defined as a Haskell list so tests can compute expectations from it (25 rows,
 zero-padded ids so text ordering is unambiguous): rows `i01`–`i10` all at
@@ -1056,7 +1077,7 @@ and cursor codec restated in Context and Orientation — the only in-repo depend
 `hasql >=1.10 && <1.11` (`Hasql.Statement`, `Hasql.Encoders`, `Hasql.Decoders`);
 `hasql-dynamic-statements >=0.5.1 && <0.6` (`Hasql.DynamicStatements.Snippet` — `Snippet`,
 `sql`, `encoderAndParam`, `toSql`, `toStatement`); `text`, `bytestring`, `time`
-(`Data.Time.Clock`, `Data.Time.Clock.POSIX`), `uuid`, `base >=4.18`. No servant, no aeson
+(`Data.Time.Clock`, `Data.Time.Clock.POSIX`), `uuid`, `base >=4.21`. No servant, no aeson
 (cursor JSON is the core's concern), no vector (rows decode via `Decoders.rowList` to
 lists). Test-suite additions: `tasty`, `tasty-hunit`, `tasty-quickcheck`, `tasty-golden`,
 and `ephemeral-pg` (git pin `https://github.com/shinzui/ephemeral-pg.git` @
@@ -1090,3 +1111,6 @@ treats `paginate` as its system under test and must be told about the `Either Cu
 return shape (see Decision Log); EP-5 quotes this module's API in the guides. Any further
 deviation from the API above must be cascaded to those plans and to the MasterPlan's
 Integration Points section, with Decision Log entries on both ends.
+
+
+Revision note (2026-07-15): Applied the cross-plan Haskell conventions from `docs/adr/1-haskell-language-and-api-conventions.md`. Updated the package to GHC 9.12.4+/GHC2024 and `base >=4.21`, added the required shared extension baseline plus `MultilineStrings`, required postpositive qualified imports and explicit existential record patterns, and specified native multiline literals for fixture DDL/base SQL while retaining one-line generated SQL goldens.

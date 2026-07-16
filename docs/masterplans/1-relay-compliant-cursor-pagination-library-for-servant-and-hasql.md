@@ -28,7 +28,7 @@ The library exists because hand-rolling this pattern is error-prone in ways that
 - **Per-table copy-paste.** The reference repeats ~150 lines of snippet-building and cursor SQL across six modules (`MlsService/Repository/Tables/{Member,Property,QualifiedAgent,AgentQualification,TanMember,LegacyQualifiedAgent}/Pagination.hs`), with cursor encoding/decoding done by string manipulation inside SQL. Our engine generates all of it from one declarative sort specification, and malformed cursors are rejected with HTTP 400 at the servant layer instead of surfacing as SQL runtime errors.
 - **Non-spec request surface.** The reference exposes `direction`/`cursor`/`count` parameters and reuses `first` for backward pages. We expose the Relay argument names `first`/`after`/`last`/`before`.
 
-Included in scope: a dependency-light core package defining the wire types and the versioned opaque cursor format; a servant package providing the `RelayPage` combinator with server, client, link, and OpenAPI 3.1 support (via `openapi-hs`/`servant-openapi-hs`, **not** the abandoned `openapi3` package); a hasql package providing the keyset-pagination engine; a conformance package that consuming services can run against their own endpoints to prove no-skip/no-duplicate behavior; and guides written for both human developers and coding agents. Excluded from scope: migrating `mls-service-v2` or any other existing service, GraphQL support, offset pagination, `totalCount` computation (may be a later extension), backends other than hasql/PostgreSQL, and cursor encryption/HMAC signing (cursors are opaque and versioned but not tamper-proof; a fingerprint guards against cross-endpoint reuse — see Integration Points).
+Included in scope: a dependency-light core package defining the wire types and the versioned opaque cursor format; a servant package providing the `RelayPage` combinator with server, client, link, and OpenAPI 3.1 support (via `openapi-hs`/`servant-openapi-hs`, **not** the abandoned `openapi3` package); a hasql package providing the keyset-pagination engine; a conformance package that consuming services can run against their own endpoints to prove no-skip/no-duplicate behavior; and guides written for both human developers and coding agents. All Haskell implementation and examples follow the applicable conventions in the registered `shinzui/haskell-jitsurei` corpus, summarized under Integration Points and recorded durably in `docs/adr/1-haskell-language-and-api-conventions.md`. Excluded from scope: migrating `mls-service-v2` or any other existing service, GraphQL support, offset pagination, `totalCount` computation (may be a later extension), backends other than hasql/PostgreSQL, and cursor encryption/HMAC signing (cursors are opaque and versioned but not tamper-proof; a fingerprint guards against cross-endpoint reuse — see Integration Points).
 
 
 ## Decomposition Strategy
@@ -43,7 +43,7 @@ EP-5 (guides and release readiness) is last and soft-depends on everything: guid
 
 Alternatives considered: folding the servant surface into the core package (rejected — core stays dependency-light so the hasql package and future non-servant consumers do not pull in servant); a single monolithic ExecPlan (rejected — five distinct functional concerns, well over five milestones, and the parallelizable middle would be serialized); adding a validation migration of one `mls-service-v2` endpoint (explicitly descoped by the user — library only).
 
-There is no `docs/adr/` directory in this repository yet; no ADRs exist. EP-1 creates the directory, and durable decisions from this MasterPlan (cursor wire format, keyset predicate form, OpenAPI 3.1 choice) should be distilled into ADRs as they are implemented.
+`docs/adr/1-haskell-language-and-api-conventions.md` records the cross-plan language, record, Servant, SQL-literal, and OpenAPI conventions adopted from `mori://shinzui/haskell-jitsurei`. EP-1 preserves this directory and adds the cursor-wire-format ADR; later plans add or extend ADRs for the keyset predicate and OpenAPI policy as those designs are implemented.
 
 
 ## Exec-Plan Registry
@@ -74,6 +74,12 @@ Parallelism summary: EP-1 alone; then EP-2 ∥ EP-3; then EP-4 (overlapping EP-2
 
 
 ## Integration Points
+
+**Haskell implementation standards (defined by EP-1; used by every plan).** The normative local sources are `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-record-patterns`, `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`, `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`, and `mori://shinzui/haskell-jitsurei/docs/api-openapi-from-types`; `mori registry show shinzui/haskell-jitsurei --full` resolves them to `/Users/shinzui/Keikaku/bokuno/haskell-jitsurei`. The repository targets GHC 9.12.4 or newer and every Cabal component imports a shared `common` stanza with `default-language: GHC2024` and baseline extensions `DeriveAnyClass`, `DuplicateRecordFields`, `OverloadedLabels`, and `OverloadedStrings`. Additional extensions are scoped to the component or module that needs them. Qualified imports use postpositive syntax (`import Data.Text qualified as Text`). Public records use unprefixed, strict fields and explicit deriving strategies. Project-owned code avoids record update syntax; a focused update of a third-party configuration value is permitted when it is that library's documented construction API, as with the `aeson-pretty` configuration in the source OpenAPI recipe. Multi-line embedded SQL uses GHC 9.12's `MultilineStrings`, while generated one-line SQL fragments remain ordinary literals. The dependency-light packages do not add `lens`, `generic-lens`, or a broad custom prelude merely to satisfy an internal application pattern: these small libraries have short, purpose-specific import lists, and importing a prelude across package boundaries would enlarge the public dependency footprint. This scoped exception is recorded in the ADR; if repeated import or update boilerplate appears during implementation, revisit it explicitly rather than introducing a prelude accidentally.
+
+**Servant endpoint and OpenAPI shape (defined by EP-2; exercised by EP-4 and EP-5).** `RelayPage` remains a composable combinator, but every repository-owned example and every consumer template mounts endpoints in a `NamedRoutes` record rather than enumerating routes with a positional `:<|>` chain. Terminal operations use servant 0.20.3 `MultiVerb` with the success and pagination-error statuses declared in the route type; the result sum has a hand-written `AsUnion` instance so reordering or extending the response list breaks at compile time. Pagination validation happens before the handler, so the combinator's `ServerError` body must use the same exported error-envelope type declared by the 400 `Respond` alternative. The generated client therefore receives the typed result sum even when `RelayPage` rejects a request upstream of the handler. Tests cover named dispatch, the 200/400 result decoding, and the stable machine-readable error code.
+
+  OpenAPI is always derived with `toOpenApi` from the exact `Proxy` passed to `serve`/`serveWithContext`; it is never authored by hand. EP-2 and EP-5 use a dedicated executable to write deterministic, key-sorted JSON with a trailing newline, check the artifact into the repository, and make CI regenerate it followed by `git diff --exit-code`. Tests pin the served path set, require the 400 response on the paginated operation, and validate representative `ToJSON` values against their `ToSchema` schemas. `ToSchema`, `ToParamSchema`, and custom-combinator `HasOpenApi` orphans remain confined to `Relay.Pagination.Servant.OpenApi` under a module-local `-Wno-orphans`.
 
 **Core wire types and module namespace (defined by EP-1; consumed by EP-2, EP-3, EP-4, EP-5).** Package `relay-pagination`, module namespace `Relay.Pagination`. The canonical API sketch below is the shared contract; EP-1 owns it, and any deviation an implementer makes must be cascaded to the other plans and recorded here and in the Decision Log. The sketch (field strictness, deriving, and instances elided):
 
@@ -138,7 +144,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 
 **OpenAPI 3.1 dependency (EP-2, consumed by EP-5's example).** OpenAPI/schema instances come from `openapi-hs` and `servant-openapi-hs` (both version 4.1.0, module names `Data.OpenApi` and `Servant.OpenApi`, sources under `/Users/shinzui/Keikaku/bokuno/openapi-hs-project`). They are **two separate git repositories** — `https://github.com/shinzui/openapi-hs.git` (commit `965340a30fad0782f2c964ab97b4ab0f12fa044d`) and `https://github.com/shinzui/servant-openapi-hs.git` (commit `7cbbc234cb7c0e900495b2f676e2912a7f456ff0`) — so `cabal.project` carries two `source-repository-package` blocks until they are on Hackage. The abandoned `openapi3` Hackage package must not appear anywhere in the build plan. EP-1 sets up both pins so EP-2 only adds the dependency.
 
-**Toolchain (defined by EP-1; used by all).** Nix flake, `cabal.project` enumerating all four packages, `fourmolu.yaml`, `Justfile`, BSD-3-Clause `LICENSE` (copyright Nadeem Bitar), and the `docs/adr/` directory. Conventions mirror the sibling library `ephemeral-pg`. GHC2021, `base >= 4.18`, hasql 1.10.x, servant 0.20.3.
+**Toolchain (defined by EP-1; used by all).** Nix flake, `cabal.project` enumerating all four packages, `fourmolu.yaml`, `Justfile`, BSD-3-Clause `LICENSE` (copyright Nadeem Bitar), and the `docs/adr/` directory. The environment continues to use the `haskell-nix-dev`/`ephemeral-pg` mechanics, while source and Cabal conventions follow `haskell-jitsurei`. GHC 9.12.4+, GHC2024, `base >= 4.21`, hasql 1.10.x, servant 0.20.3.
 
 
 ## Progress
@@ -149,9 +155,9 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [ ] EP-1 M4: Cursor codec — version + fingerprint, property round-trips, golden wire strings
 - [ ] EP-1 M5: mkPageRequest validation matrix, first ADR, acceptance sweep
 - [ ] EP-2 M1: Cursor FromHttpApiData/ToHttpApiData in core; relay-pagination-servant skeleton
-- [ ] EP-2 M2: RelayPage combinator with HasServer; all 400 classes with JSON error body
-- [ ] EP-2 M3: ClientPage, HasClient, HasLink; round-trip against warp
-- [ ] EP-2 M4: OpenAPI 3.1 HasOpenApi + schema instances, golden "openapi": "3.1.0" document
+- [ ] EP-2 M2: RelayPage HasServer plus exported 400 envelope; NamedRoutes/MultiVerb toy API with manual AsUnion
+- [ ] EP-2 M3: ClientPage, HasClient, HasLink; typed 200/400 round-trip against warp
+- [ ] EP-2 M4: Type-derived OpenAPI 3.1, deterministic generator, schema/response/path tests, checked artifact
 - [ ] EP-2 M5: Demo executable, curl transcript, polish, closeout
 - [ ] EP-3 M1: relay-pagination-hasql skeleton, ephemeral-pg pin
 - [ ] EP-3 M2: KeyCodec built-ins, existential KeyColumn/SortSpec, FNV-1a fingerprint goldens
@@ -164,7 +170,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [ ] EP-4 M4: Adversarial QuickCheck datasets against EP-3's engine over ephemeral-pg
 - [ ] EP-4 M5: Mutation-under-walk properties (insert/delete during walk; OFFSET paginator fails)
 - [ ] EP-4 M6: HTTP-level conformance through RelayPage (deferrable if EP-2 unfinished)
-- [ ] EP-5 M1: examples/members-server runnable via just example
+- [ ] EP-5 M1: domain-first NamedRoutes/MultiVerb members example, conformance test, deterministic OpenAPI generator, runnable via just example
 - [ ] EP-5 M2: Developer guide (docs/guides/implementing-pagination.md)
 - [ ] EP-5 M3: Agent guide + copy-able agents/skills/add-paginated-endpoint skill
 - [ ] EP-5 M4: README and per-package changelogs
@@ -180,6 +186,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While authoring EP-3 (2026-07-15): `paginate` was refined to return `Either CursorError (Statement …)` instead of a bare `Statement`, so a cursor that cannot decode against the sort spec fails before any SQL runs. Cascaded into EP-4's `fetchViaEngine` wiring and EP-5's API restatements.
 - While authoring EP-3 (2026-07-15): `Hasql.DynamicStatements.Snippet.toSql` exists in hasql-dynamic-statements 0.5.1 (verified in source), which makes pure golden tests of generated SQL possible without a database — the SQL-generation test strategy question resolved itself.
 - After drafting (2026-07-15 20:00): the user hand-scaffolded part of EP-1's Milestone 1 toolchain directly in the working tree (`flake.nix` from `github:shinzui/haskell-nix-dev`, `flake.lock`, `nix/{haskell,treefmt,pre-commit}.nix`, `fourmolu.yaml`, `process-compose.yaml`, `.gitignore` update), uncommitted. EP-1's Surprises section instructs the implementer to adopt and verify these files rather than author them from scratch.
+- During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 
 ## Decision Log
@@ -229,6 +236,10 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
   Rationale: Cursor decoding against the sort spec can fail (fingerprint, arity, key types); surfacing that before any SQL runs lets servant handlers map it to HTTP 400 and keeps garbage cursors out of the database — the reference implementation turned them into SQL runtime errors (500s).
   Date: 2026-07-15
 
+- Decision: Adopt the applicable `shinzui/haskell-jitsurei` conventions as cross-plan constraints: GHC 9.12.4+/GHC2024 and its shared Cabal baseline, postpositive qualified imports, strict unprefixed records with explicit deriving strategies, `MultilineStrings` for embedded multi-line SQL, `NamedRoutes` plus hand-mapped `MultiVerb` results for repository-owned Servant APIs, and deterministic OpenAPI artifacts derived from the served type.
+  Rationale: These are the user's maintained Haskell practices and they prevent concrete failure modes relevant here: positional route misdispatch, error statuses missing from clients/documents, hand-edited OpenAPI drift, and unreadable embedded SQL. The small package family deliberately does not adopt the custom-prelude/generic-lens pattern yet because doing so would add dependencies to otherwise dependency-light public libraries without enough repeated code to repay the cost.
+  Date: 2026-07-15
+
 
 ## Outcomes & Retrospective
 
@@ -238,3 +249,5 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 ---
 
 Revision note (2026-07-15): After parallel drafting of the five child ExecPlans, reconciled cross-plan drift: corrected the openapi-hs pin to two separate repositories with commit hashes; adopted EP-1's wire-bytes `Cursor` representation in the core sketch; adopted EP-2's core placement of the `Cursor` HTTP instances (EP-1's contrary sentence rewritten); adopted EP-3's `Either CursorError` return for `paginate` and cascaded it into EP-4's test wiring and EP-5's API restatements; rebuilt the Progress section to mirror the child plans' actual 28 milestones; recorded all of the above in Surprises & Discoveries and the Decision Log.
+
+Revision note (2026-07-15): Reviewed the registered `shinzui/haskell-jitsurei` corpus and made its applicable practices explicit across the initiative. Updated the toolchain baseline to GHC 9.12.4+/GHC2024 and `base >= 4.21`; required shared Cabal settings, strict records, explicit deriving, postpositive qualified imports, and `MultilineStrings` for embedded SQL; changed repository-owned HTTP examples and templates to `NamedRoutes` plus manually mapped `MultiVerb` result sums; changed OpenAPI work to derive from the served type through a deterministic executable with drift and schema checks; cascaded these constraints into all five child ExecPlans; and recorded the durable policy in `docs/adr/1-haskell-language-and-api-conventions.md`.

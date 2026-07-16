@@ -28,8 +28,8 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `examples/members-server` package created, listed in `cabal.project`, compiles with `cabal build all`
-- [ ] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves an OpenAPI 3.1 document
+- [ ] M1: `examples/members-server` package created with both executables and its conformance test, listed in `cabal.project`; `cabal build all` and `cabal test members-server:test:members-server-test` pass
+- [ ] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves the same OpenAPI 3.1 value that `members-openapi` writes deterministically to `docs/api/openapi.json`
 - [ ] M1: Curl transcript captured from a real run and pasted into this plan and into the developer guide (replacing the illustrative one below)
 - [ ] M2: `docs/guides/implementing-pagination.md` written, all code blocks compile-checked against the example server
 - [ ] M3: `docs/guides/agent-guide.md` written
@@ -80,6 +80,10 @@ Record every decision made while working on the plan.
 
 - Decision: Release order is core → hasql → conformance → servant, with servant explicitly blocked until `openapi-hs`/`servant-openapi-hs` are on Hackage; this is documented in the README's release-status section, not hidden in a comment.
   Rationale: `relay-pagination-servant`'s *library* component depends on the git-pinned `openapi-hs` packages, so Hackage cannot resolve it. `relay-pagination-conformance`'s library depends only on the core package and a `fetchPage` callback; its `ephemeral-pg` dependency is confined to test components, which Hackage does not require to be resolvable for the library to be installable — so it can ship early. Stating this in the README prevents a well-meaning contributor from attempting an upload that must fail.
+  Date: 2026-07-15
+
+- Decision: The example and every guide/template apply `docs/adr/1-haskell-language-and-api-conventions.md`: GHC 9.12.4+/GHC2024, shared Cabal baseline, postpositive qualified imports, strict unprefixed records with explicit deriving, `MultilineStrings` for embedded SQL, domain-first modules, `NamedRoutes`, terminal `MultiVerb` with hand-written `AsUnion`, and OpenAPI derived from the served type by a dedicated executable.
+  Rationale: EP-5 is the copy surface downstream developers and agents will imitate. Following the implementation convention in library code while publishing a positional/plain-`Get` quickstart would recreate the exact drift the Haskell corpus is meant to prevent. The relevant sources are `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`, `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`, and `mori://shinzui/haskell-jitsurei/docs/api-openapi-from-types`.
   Date: 2026-07-15
 
 
@@ -140,14 +144,26 @@ By the time this plan starts, EP-1 through EP-4 have delivered, in this repo:
 
   A cursor is `base64url(JSON)` of `{"v": <int>, "f": <int>, "k": [<key values>]}` — `v` is the format version (1), `f` is a 32-bit *fingerprint* of the endpoint's sort specification (column expressions, directions, codec tags) so a cursor minted by one endpoint is rejected with a decode error when presented to another, and `k` carries the sort-key values with timestamps as exact integer microseconds (never floats or text).
 
-- **Package `relay-pagination-servant`** (directory `relay-pagination-servant/`, module `Relay.Pagination.Servant`, from EP-2): the `RelayPage` combinator, a servant API combinator that expands to the four optional query parameters `first`, `after`, `last`, `before` and delivers a validated `PageRequest` to the handler, rejecting malformed or mismatched-fingerprint input as HTTP 400 with a JSON error body before the handler runs. It has `HasServer`, `HasClient`, `HasLink`, and OpenAPI 3.1 instances (via `openapi-hs`/`servant-openapi-hs`, modules `Data.OpenApi` and `Servant.OpenApi`, git-pinned from `https://github.com/shinzui/openapi-hs.git` — the abandoned `openapi3` Hackage package appears nowhere). An endpoint declaration looks like:
+- **Package `relay-pagination-servant`** (directory `relay-pagination-servant/`, module `Relay.Pagination.Servant`, from EP-2): the `RelayPage` combinator, a servant API combinator that expands to the four optional query parameters `first`, `after`, `last`, `before` and delivers a validated `PageRequest` to the handler, rejecting malformed input as HTTP 400 with the exported `RelayPageError` body before the handler runs. It has `HasServer`, `HasClient`, `HasLink`, and OpenAPI 3.1 instances (via `openapi-hs`/`servant-openapi-hs`, modules `Data.OpenApi` and `Servant.OpenApi`, git-pinned from `https://github.com/shinzui/openapi-hs.git` — the abandoned `openapi3` Hackage package appears nowhere). Repository examples pair it with a named route record and a typed terminal response:
 
   ```haskell
-  type MembersApi =
-    "members" :> RelayPage :> Get '[JSON] (Connection Member)
+  type MemberPageResponses =
+    '[ Respond 200 "Page of members" (Connection Member)
+     , Respond 400 "Invalid pagination" RelayPageError
+     ]
+
+  data MemberRoutes mode = MemberRoutes
+    { listMembers :: mode :- "members" :> RelayPage 20 100
+        :> MultiVerb 'GET '[JSON] MemberPageResponses MemberPageResult
+    }
+    deriving stock (Generic)
   ```
 
-  Before writing any guide text, read the *finished* EP-2 source under `relay-pagination-servant/src/` and confirm the combinator's exact shape (whether page-size limits ride on the combinator as type-level arguments, how the handler receives the `PageRequest`, the exact 400 body schema). If it differs from this sketch, update every quotation in this plan and the guides, and record the deviation in this Decision Log.
+  `MemberPageResult` is the two-constructor success/error sum and has a hand-written
+  `AsUnion MemberPageResponses MemberPageResult` instance. Before writing any guide text,
+  read the *finished* EP-2 source under `relay-pagination-servant/src/` and confirm the
+  combinator, result, client, and error-envelope shapes. If they differ from this sketch,
+  update every quotation in this plan and the guides, and record the deviation here.
 
 - **Package `relay-pagination-hasql`** (directory `relay-pagination-hasql/`, module `Relay.Pagination.Hasql`, from EP-3): the keyset engine. Its public API per the MasterPlan:
 
@@ -177,11 +193,11 @@ By the time this plan starts, EP-1 through EP-4 have delivered, in this repo:
 
 - **Package `relay-pagination-conformance`** (directory `relay-pagination-conformance/`, module `Relay.Pagination.Conformance`, from EP-4): a walker that services run against their own endpoints. It deliberately does not depend on hasql sessions or HTTP clients; the service supplies a callback `fetchPage :: PageRequest -> IO (Connection row)` and the suite (entry points `checkConformance` and the lower-level `walkForward`/`walkBackward` walks) pages through the whole dataset asserting no row is skipped or duplicated, boundaries report `hasNextPage`/`hasPreviousPage` correctly, and forward and backward walks agree. As with EP-2, read the finished EP-4 exports before quoting them and reconcile any drift here.
 
-- **Toolchain** (from EP-1): a nix flake, `cabal.project` enumerating the packages, `fourmolu.yaml`, a `Justfile` (`just` is a command runner; recipes are invoked as `just <name>` from the repo root), BSD-3-Clause `LICENSE` (copyright Nadeem Bitar), GHC2021, `base >= 4.18`, hasql 1.10.x, servant 0.20.3.
+- **Toolchain** (from EP-1): a nix flake, `cabal.project` enumerating the packages, `fourmolu.yaml`, a `Justfile` (`just` is a command runner; recipes are invoked as `just <name>` from the repo root), BSD-3-Clause `LICENSE` (copyright Nadeem Bitar), GHC 9.12.4+, GHC2024, `base >= 4.21`, hasql 1.10.x, servant 0.20.3.
 
 Two external tools this plan touches: **`ephemeral-pg`** (local library at `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`, modules `EphemeralPg`, `EphemeralPg.Config`) creates temporary PostgreSQL clusters for tests and examples — a database that exists only while the process runs. **`mori`** is the user's cross-project dependency registry CLI: a repo describes itself in a `mori.dhall` file at its root (Dhall is a typed configuration language), and once registered, other projects discover it via `mori registry search <name>` and `mori registry show <project> --full`; `mori show --full` run inside a repo prints that repo's own registered identity.
 
-ADR status: EP-1 creates `docs/adr/`, and EP-1 through EP-4 are directed to distill durable decisions (cursor wire format, keyset predicate form, OpenAPI 3.1 choice) into it. At the time this plan was authored no ADRs existed yet. Before starting milestone M2 (the developer guide), scan `docs/adr/` filenames and headings, read the ADRs about the cursor format and PageInfo semantics if present, and cite them in the guide rather than re-deriving their rationale; list the ADRs you consulted here.
+ADR status: `docs/adr/1-haskell-language-and-api-conventions.md` already governs this plan. EP-1 through EP-4 are also directed to distill durable decisions such as the cursor wire format, keyset predicate form, and OpenAPI policy. Before starting M1, scan `docs/adr/` filenames/headings and read the Haskell-conventions ADR plus any cursor, PageInfo, keyset, or error-envelope ADR. Cite relevant ADRs in the guides rather than re-deriving their rationale; list the ADRs consulted here.
 
 Git conventions for this plan: every commit follows Conventional Commits (`feat:`, `docs:`, `chore:` …) and carries these trailers at the end of the message body, separated from the body by a blank line:
 
@@ -201,12 +217,18 @@ The work proceeds in seven milestones. The example server comes first because ev
 
 Scope: a fifth, never-released cabal package that exercises all four released packages together and gives the guides a living, CI-compiled source of truth. At the end of this milestone, `just example` boots an HTTP server on port 8080 against a throwaway PostgreSQL database, seeded with deterministic data, and a curl session pages through it with real cursors.
 
-Create `examples/members-server/members-server.cabal` declaring one executable `members-server` with `main-is: Main.hs`, `hs-source-dirs: src`, GHC2021, and build-depends on `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, `relay-pagination-conformance`, `ephemeral-pg`, `hasql`, `servant-server`, `warp`, `aeson`, `uuid`, `time`, `text`, `bytestring`, plus the pinned `openapi-hs`/`servant-openapi-hs` for the `/openapi.json` route. Give it `cabal-version: 3.0`, a synopsis ("Example members-server for relay-pagination"), and BSD-3-Clause license so `cabal build all` is warning-quiet — but this package is never uploaded to Hackage and needs no changelog. Add `examples/members-server` to the `packages:` stanza of `cabal.project` so CI (which runs `cabal build all` per EP-1's setup) compiles it on every change; this is the anti-rot mechanism for every code block the guides quote.
+Create `examples/members-server/members-server.cabal` with a shared `common` stanza using `default-language: GHC2024`, the repository baseline extensions, and `MultilineStrings`; set `base >=4.21`. Give this unreleased package a small library component for the reusable `Example.*` modules under `src`, plus executable `members-server`, executable `members-openapi`, and test suite `members-server-test` under `app` and `test`. This avoids compiling or copy-pasting the API, handler, and OpenAPI definitions separately in three components. The server's `main-is` is `Main.hs`, while the generator's is `OpenApiMain.hs`.
 
-Write `examples/members-server/src/Main.hs` (split helper modules out under `examples/members-server/src/` if it grows past ~300 lines; add them to `other-modules`). The program:
+Keep `build-depends` component-specific so `-Wunused-packages` remains meaningful. The example library owns `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, `hasql`, `servant-server`, `aeson`, `uuid`, `time`, `text`, `bytestring`, and the pinned OpenAPI packages. `members-server` depends on that local library plus `ephemeral-pg` and `warp`; `members-openapi` depends on the local library plus `aeson-pretty` and `bytestring`; `members-server-test` depends on the local library plus `relay-pagination-conformance`, `ephemeral-pg`, `servant-client`, `http-client`, `warp`, `tasty`, and `tasty-hunit`. If a shared source module imports one of those packages, move the dependency to the library rather than relying on a transitive executable dependency. Give the package `cabal-version: 3.0`, synopsis "Example members-server for relay-pagination", and BSD-3-Clause metadata so `cabal build all` is warning-quiet. This package is never uploaded and needs no changelog. Add it to `cabal.project`; compiling both executables and running the test in CI are the anti-rot mechanisms for the guide snippets, package integration, and generated API artifact.
+
+Organize the example library as a domain-first vertical slice, even though it has one aggregate: `Example.Members.Domain` owns `Member`; `Example.Members.Api` owns the named route and typed result; `Example.Members.Query` owns the `SortSpec`, row decoder, and base query; `Example.Members.Handler` runs pagination; and `Example.OpenApi` derives/enriches the document. The app entry points stay thin: `app/Main.hs` only acquires resources and serves the root, and `app/OpenApiMain.hs` only writes the artifact. List every module in the correct Cabal field (`exposed-modules` for the example library, `other-modules` only for component-private modules). Do not collapse these into layer-first `Example.Api.Routes`/`Example.Types` modules or a monolithic `Main.hs`.
+
+The program:
 
 1. Boots an ephemeral PostgreSQL cluster with `EphemeralPg` (follow the README at `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg/README.md` for the exact acquire/with-style entry point) and acquires a hasql `Connection` to it.
-2. Creates the schema and the composite index that matches the sort specification:
+2. Creates the schema and the composite index that matches the sort specification. Embed
+   the following DDL with GHC 9.12 `MultilineStrings`; keep seed values as typed hasql
+   parameters rather than interpolating them into SQL text:
 
    ```sql
    CREATE TABLE members (
@@ -220,7 +242,7 @@ Write `examples/members-server/src/Main.hs` (split helper modules out under `exa
    ```
 
 3. Seeds exactly ten rows with fixed literal UUIDs and timestamps (write them as constants in the source — do not generate randomly, so the curl transcript is reproducible). Deliberately give two of the rows the *same* `created_at` value: this demonstrates why the unique `id` tie-breaker column exists, and the transcript will show the tie being broken deterministically.
-4. Defines the payload type and API:
+4. Defines the strict payload, a manually mapped result sum, and a named API:
 
    ```haskell
    data Member = Member
@@ -229,27 +251,55 @@ Write `examples/members-server/src/Main.hs` (split helper modules out under `exa
      , email     :: !Text
      , createdAt :: !UTCTime
      }
+     deriving stock (Generic, Eq, Show)
+     deriving anyclass (FromJSON, ToJSON)
 
-   type Api =
-          "members" :> RelayPage :> Get '[JSON] (Connection Member)
-     :<|> "openapi.json" :> Get '[JSON] OpenApi
+   type MemberPageResponses =
+     '[ Respond 200 "Page of members" (Connection Member)
+      , Respond 400 "Invalid pagination" RelayPageError
+      ]
+
+   data MemberPageResult
+     = MemberPageOk !(Connection Member)
+     | MemberPageBadRequest !RelayPageError
+     deriving stock (Eq, Show)
+
+   data MemberRoutes mode = MemberRoutes
+     { listMembers :: mode :- "members" :> RelayPage 3 50
+         :> MultiVerb 'GET '[JSON] MemberPageResponses MemberPageResult
+     }
+     deriving stock (Generic)
+
+   data AppRoutes mode = AppRoutes
+     { members :: mode :- NamedRoutes MemberRoutes
+     , openapi :: mode :- "openapi.json"
+         :> MultiVerb1 'GET '[JSON] (Respond 200 "OpenAPI 3.1 document" OpenApi)
+     }
+     deriving stock (Generic)
    ```
 
-   (Adjust the `RelayPage` line to the finished EP-2 combinator shape; the handler receives the validated `PageRequest`.)
+   Write `AsUnion MemberPageResponses MemberPageResult` by hand using `Z`, `S`, and `I`;
+   do not derive through `GenericAsUnion`. The handler receives the validated
+   `PageRequest`. If EP-2's final names differ, update the example and all guide snippets
+   together.
 5. Wires the engine with a two-column, mixed-direction sort specification — newest first, ties broken by ascending id:
 
    ```haskell
    memberSort :: SortSpec Member
    memberSort = SortSpec
-     ( KeyColumn "created_at" Desc (.createdAt) timestamptzKey
-       :| [ KeyColumn "id" Asc (.id) uuidKey ] )
+     ( KeyColumn "created_at" Desc (\Member {createdAt} -> createdAt) timestamptzKey
+       :| [ KeyColumn "id" Asc (\Member {id = memberId} -> memberId) uuidKey ] )
 
    baseQuery :: Snippet
-   baseQuery = "SELECT id, name, email, created_at FROM members"
+   baseQuery = Snippet.sql """
+     SELECT id, name, email, created_at
+     FROM members
+     """
    ```
 
    The handler calls `paginate memberSort pageRequest baseQuery memberRow`, runs the resulting `Statement` in a hasql `Session` on the ephemeral connection, and returns the `Connection Member`. Use a `PageConfig` of `defaultPageSize = 3`, `maxPageSize = 50` so a bare `GET /members` shows a partial page.
-6. Serves the OpenAPI 3.1 document generated by `Servant.OpenApi`'s `toOpenApi` for the `"members"` sub-API at `/openapi.json`, and starts warp on port 8080, printing `members-server listening on http://localhost:8080` when ready.
+6. Defines one `appApi :: Proxy (NamedRoutes AppRoutes)` and uses that exact value for both `serve` and `toOpenApi`. `Example.OpenApi` adds only title/version/description/server and stable operation ids—the facts route types cannot carry. `members-openapi` writes sorted, newline-terminated JSON to `docs/api/openapi.json`; `GET /openapi.json` serves the same `OpenApi` value. Starts warp on port 8080, printing `members-server listening on http://localhost:8080` when ready.
+7. Adds `members-server-test`, which seeds the same duplicate-timestamp fixture and runs `checkConformance` through the example's typed client (or directly through its handler if the finished EP-4 callback makes that substantially simpler). This is where the example actually consumes `relay-pagination-conformance`; do not leave the package as an unused executable dependency. The test walks forward and backward, checks that the typed client distinguishes `MemberPageOk` from `MemberPageBadRequest`, and is part of `cabal test all`.
 
 Add to the `Justfile`:
 
@@ -257,9 +307,13 @@ Add to the `Justfile`:
 # Boot the example members-server against an ephemeral PostgreSQL database
 example:
     cabal run members-server
+
+# Regenerate the checked-in OpenAPI document from the served API type
+openapi:
+    cabal run members-openapi
 ```
 
-Acceptance: `just example` prints the listening line; the curl transcript in Validation and Acceptance below matches (after M1's "capture real transcript" progress item replaces the illustrative cursors); `curl -s localhost:8080/openapi.json | grep -o '"openapi":"3.1[^"]*"'` prints an OpenAPI 3.1 version; `cabal build all` builds the example without flags. Commit as `feat(example): add members-server example exercising all four packages` with the standard trailers.
+Acceptance: `just example` prints the listening line; the curl transcript in Validation and Acceptance below matches (after M1's "capture real transcript" progress item replaces the illustrative cursors); `curl -s localhost:8080/openapi.json | grep -o '"openapi":"3.1[^"]*"'` prints an OpenAPI 3.1 version; `cabal build all` builds the example without flags; and `cabal test members-server:test:members-server-test` passes its typed-client conformance walk. `just openapi` rewrites `docs/api/openapi.json` deterministically, and `just openapi && git diff --exit-code -- docs/api/openapi.json` proves the checked-in artifact is current. Commit as `feat(example): add members-server example exercising all four packages` with the standard trailers.
 
 
 ### Milestone 2 — Developer guide (`docs/guides/implementing-pagination.md`)
@@ -268,14 +322,16 @@ Scope: the human-facing guide, written for a Haskell developer adding pagination
 
 1. **Why cursor pagination** — the opening section earns the reader's attention. Explain that `OFFSET`-based pagination breaks infinite scrolling because rows shift under the walker: if a row is inserted (or deleted) before the walker's current position between two requests, `OFFSET 20` no longer points where it did, so the client sees a duplicate (or silently skips a record) at the page boundary. Also note `OFFSET n` costs O(n) — the database must produce and discard n rows. Keyset pagination anchors the next page to the *values* of the last row seen, so insertions elsewhere cannot shift it and the composite index makes each page O(page size). Explain the Relay vocabulary (connection, edge, cursor, pageInfo, `first`/`after`/`last`/`before`) with the JSON example from this plan's Context section, and state the argument rule: `first`+`after` or `last`+`before`, never `first`+`last` (rejected with 400).
 2. **Choosing a sort specification** — the design step, before any code. Rules to state plainly: the specification is an ordered list of columns; the *last* column must be unique per row and `NOT NULL` (a primary key or unique key), because it is the tie-breaker that makes the keyset comparison a total order — without it, rows sharing the earlier keys can be skipped or duplicated at page boundaries. Each column needs a typed codec (`timestamptzKey`, `uuidKey`, `int8Key`, `textKey`, `boolKey`); pick the codec matching the column's PostgreSQL type, and note that timestamps travel inside cursors as exact integer microseconds — never text or floats — which is the library's defense against boundary skips. Index advice: create a composite btree index whose columns and per-column directions match the sort specification exactly (as the example's `members_created_at_desc_id_asc` does); PostgreSQL can also scan such an index backward, which serves `last`/`before` pages, so one index covers both directions. Warn that `NULLS FIRST/LAST` behavior and nullable sort columns are out of v1 scope: use `NOT NULL` columns.
-3. **Declaring the endpoint** — quote the example's `Api` type and `Member` payload; show the handler signature receiving the validated `PageRequest`; state what the combinator does for free (parameter parsing, cursor decoding, fingerprint check, 400s with a JSON error body before your handler runs).
-4. **Wiring the engine** — quote `memberSort`, `baseQuery`, and the handler's `paginate` call from the example. Emphasize the base-query contract: it is a hasql `Snippet` of the form `SELECT <cols> FROM … WHERE <your filters>` with *no* `ORDER BY`, *no* `LIMIT`, and no cursor logic — the engine appends all of that. Show the generated SQL shape (expanded lexicographic predicate, `ORDER BY`, `LIMIT n+1`) once, in a `sql` block, so readers can recognize it in `pg_stat_statements`.
-5. **Serving the OpenAPI document** — quote the `/openapi.json` route from the example and note it is OpenAPI **3.1** via `openapi-hs`/`servant-openapi-hs` (modules `Data.OpenApi`/`Servant.OpenApi`), not the abandoned `openapi3` package.
+3. **Declaring the endpoint** — quote the example's `MemberRoutes` and `AppRoutes` records, `MemberPageResponses`, hand-written `AsUnion`, result sum, and `Member` payload; show the handler signature receiving the validated `PageRequest`; state what the combinator does for free (parameter parsing, cursor decoding, fingerprint check, 400s with a JSON error body before your handler runs). Explain why the route is a domain-owned `NamedRoutes` record and why the terminal operation is a `MultiVerb`: the same type specifies the success and error bodies used by server, typed client, links, and OpenAPI. Do not teach a positional `:<|>` tree, plain terminal `Get`, or `GenericAsUnion`.
+4. **Wiring the engine** — quote `memberSort`, `baseQuery`, and the handler's `paginate` call from the example. Emphasize the base-query contract: it is a hasql `Snippet` of the form `SELECT <cols> FROM … WHERE <your filters>` with *no* `ORDER BY`, *no* `LIMIT`, and no cursor logic — the engine appends all of that. Use `MultilineStrings` for the human-authored multiline base query and DDL, while keeping generated SQL fragments and single-line SQL as ordinary strings. Show the generated SQL shape (expanded lexicographic predicate, `ORDER BY`, `LIMIT n+1`) once, in a `sql` block, so readers can recognize it in `pg_stat_statements`.
+5. **Serving and checking the OpenAPI document** — quote the `/openapi.json` route from the example and note it is OpenAPI **3.1** via `openapi-hs`/`servant-openapi-hs` (modules `Data.OpenApi`/`Servant.OpenApi`), not the abandoned `openapi3` package. Show that both `serve` and `toOpenApi` consume the same `appApi` proxy, and that `members-openapi`—not a hand-edited document or a test with an `--accept` mode—writes sorted, newline-terminated `docs/api/openapi.json`. Include the drift command and tests for the `/members` path, the four query parameters, 200 and 400 responses, stable operation id, and validation of representative JSON values against every referenced schema.
 6. **Running the conformance suite before shipping** — the mandatory verification step. Show how to wire `checkConformance` with a `fetchPage :: PageRequest -> IO (Connection row)` callback bound to the reader's own endpoint (either directly over a hasql session or over HTTP via `servant-client`), seed a dataset that includes duplicate sort-key values, and run it in their test suite. State the promise: the suite walks the full dataset forward and backward and fails if any row is skipped or duplicated or any `pageInfo` flag is wrong. Include the exact expected passing output once EP-4's runner exists.
 7. **Trying it locally** — pointer to `just example` and the curl transcript (the real one captured in M1).
 8. **Appendix: anti-patterns** — a short prose catalogue, each with the failure it causes: `OFFSET`/`LIMIT` pagination (skips and duplicates under concurrent writes; O(n) pages); encoding timestamps into cursors as epoch floats or text (lossy round-trip through `double precision` misses the equality arm of the keyset predicate and skips every row sharing the boundary timestamp — this is a real bug class the library was built to kill); non-unique sort keys without a tie-breaker (page boundaries fall inside a run of equal keys and rows are lost); changing the base query's *filters* between requests while reusing a cursor (the fingerprint covers the sort specification, not your `WHERE` clause — a cursor from `?status=active` pages nonsense when replayed against `?status=all`; either include filter identity in your endpoint design or document that cursors are per-filter); trusting client-supplied page sizes (always construct requests through `mkPageRequest` with a `PageConfig`, which clamps to `maxPageSize` — never pass a raw `first` into `LIMIT`).
 
-Acceptance: the guide exists, every fenced block has a language tag, every Haskell block matches the compiled example (verify by diffing against the example source, not by eye), and a colleague-level reader can go from zero to a conformance-passing endpoint using only this file and the package haddocks. Commit as `docs(guides): add implementing-pagination developer guide`.
+Add a brief **Project conventions used by this example** callout near the first Haskell block: GHC 9.12.4+/GHC2024; each component imports the repository's shared Cabal baseline; imports use postpositive `qualified`; public records use strict unprefixed fields and explicit deriving strategies; selectors or explicit patterns are preferred over record updates; and multiline embedded SQL uses `MultilineStrings`. State that a consuming service should follow its own established equivalents when they are stricter, while preserving the public route and response-shape guarantees above.
+
+Acceptance: the guide exists, every fenced block has a language tag, every Haskell block matches the compiled example (verify by diffing against the example source, not by eye), the checked-in OpenAPI document passes the drift and schema-validation checks, and a colleague-level reader can go from zero to a conformance-passing endpoint using only this file and the package haddocks. Commit as `docs(guides): add implementing-pagination developer guide`.
 
 
 ### Milestone 3 — Agent guide and copy-able skill
@@ -300,7 +356,7 @@ user-invocable: true
 
 The SKILL.md body outline (write it in this order; keep it imperative and under ~250 lines):
 
-1. **Preconditions** — verify the service already depends on `servant-server` and `hasql`; verify the four `relay-pagination` packages are in the build plan (add them if not; note the servant package's `openapi-hs` git pin requirement until Hackage publication).
+1. **Preconditions** — verify the service already depends on `servant-server` and `hasql`; verify the four `relay-pagination` packages are in the build plan (add them if not; note the servant package's `openapi-hs` git pin requirement until Hackage publication). Read the consuming service's Cabal common stanzas and conventions first. For this package family, require GHC 9.12.4+/GHC2024 and `base >=4.21`; preserve a consuming repository's stricter standards rather than cloning this repository's extensions blindly.
 2. **Step 1: choose the sort specification** — checklist: pick the display order; append the table's primary key (or another unique `NOT NULL` column) as the final tie-breaker; one codec per column matching its PostgreSQL type. Never use a float or a nullable column as a sort key.
 3. **Step 2: create the composite index** — template migration SQL with columns and directions matching the spec exactly (instantiate table/column names):
 
@@ -308,12 +364,12 @@ The SKILL.md body outline (write it in this order; keep it imperative and under 
    CREATE INDEX <table>_<keys>_idx ON <table> (<col1> <DIR1>, <col2> <DIR2>);
    ```
 
-4. **Step 3: declare the endpoint** — exact code template of the API type with `RelayPage` and `Connection <Payload>`, instantiating the resource name.
-5. **Step 4: wire the engine** — exact code template of the `SortSpec`, base `Snippet` (state the contract in one line: filters yes, `ORDER BY`/`LIMIT`/cursor logic no), and the handler's `paginate` call plus session run. Templates instantiate from the finished example server's code, generalized with `<PLACEHOLDERS>`.
+4. **Step 3: declare the endpoint** — exact code template of a domain-owned `NamedRoutes` record with `RelayPage`, a terminal `MultiVerb` response list containing `Connection <Payload>` and `RelayPageError`, a result sum, and a hand-written `AsUnion` using `Z`, `S`, and `I`. Instruct the agent not to introduce a positional `:<|>` route tree, a plain terminal `Get`, or `GenericAsUnion`. Use the same API proxy for the server, typed client, and OpenAPI derivation.
+5. **Step 4: wire the engine** — exact code template of the `SortSpec`, base `Snippet` (state the contract in one line: filters yes, `ORDER BY`/`LIMIT`/cursor logic no), and the handler's `paginate` call plus session run. Templates instantiate from the finished example server's code, generalized with `<PLACEHOLDERS>`. Use strict unprefixed fields, explicit deriving strategies, explicit record patterns or selectors, postpositive qualified imports, and `MultilineStrings` for multiline base SQL or DDL; keep values in typed hasql parameters.
 6. **Step 5 (MANDATORY): run the conformance suite** — add a test that seeds rows *including duplicate sort-key values*, wires `fetchPage` to the new endpoint, and calls `checkConformance`. Give the exact test invocation for a cabal project (`cabal test <suite> --test-options='-p "conformance"'` adjusted to the service's runner). State plainly: do not report the task complete until this passes.
-7. **Step 6: regenerate OpenAPI artifacts** if the service checks in an openapi.json.
+7. **Step 6: regenerate OpenAPI artifacts** if the service checks in an openapi.json. Run the repository's dedicated generator; never hand-edit the artifact or add an `--accept` path to tests. Prove a second generation has no diff, and verify path/query-parameter sets, documented 200/400 responses, stable operation ids, and representative JSON values against all referenced schemas.
 8. **Failure diagnoses** — a terse fingerprint→cause list: HTTP 400 "fingerprint mismatch" on a previously working cursor ⇒ the sort specification changed (columns, directions, or codecs) or the cursor came from a different endpoint; clients must drop stored cursors after a spec change — this is by design, not a bug. Empty last page with `hasNextPage: true` on the prior page ⇒ an engine invariant is broken — check that nothing hand-rolls `hasNextPage` from `length == pageSize` instead of using the engine's probe row; if the engine itself is at fault, file against `relay-pagination-hasql`, do not patch around it. Rows skipped or duplicated at page boundaries ⇒ the final sort column is not actually unique, or a custom codec is lossy (floats, truncated timestamps). Both `first` and `last` supplied ⇒ 400 by design. SQL error mentioning your column in the generated `WHERE` ⇒ `columnExpr` names a column the base query does not select.
-9. **Done criteria** — endpoint compiles, conformance passes, index exists, OpenAPI regenerated.
+9. **Done criteria** — endpoint and typed client compile, the client can distinguish the success and `RelayPageError` arms, conformance passes, index exists, and deterministic OpenAPI regeneration produces no diff.
 
 `docs/guides/agent-guide.md` carries the same steps with fuller prose, the *why* behind each diagnosis (one short paragraph each), a note on how to copy the skill directory into a consuming repo, and a pointer back to `implementing-pagination.md` for humans. Acceptance: reading SKILL.md alone (with the packages' haddocks) is sufficient to complete the task in a foreign repo — check this by grepping the skill for repo-relative paths (there must be none pointing outside its own directory). Commit as `docs(agents): add agent guide and add-paginated-endpoint skill`.
 
@@ -323,12 +379,12 @@ The SKILL.md body outline (write it in this order; keep it imperative and under 
 Scope: the repo's front door. Write `README.md` at the repo root modeled on `kafka-effectful`'s README (positioning sentence, status caveat, features, quickstart, module/package map, requirements, license). Required content:
 
 - **Positioning**: "Relay-compliant cursor pagination for servant + hasql REST APIs" — one paragraph on what it does (declare `RelayPage`, write a base query, declare a `SortSpec`; the library does parsing, cursors, keyset SQL, connection assembly, OpenAPI 3.1) and one on why (the boundary-skip/duplicate bug class of hand-rolled cursor pagination).
-- **60-second quickstart**: a single `haskell` block, extracted from the example server, showing the API type with `RelayPage`, the two-column `SortSpec`, and the handler's `paginate` call — the three things a user writes. Follow it with one line: `just example` boots a complete runnable version.
+- **60-second quickstart**: a single `haskell` block, extracted from the example server, showing the domain-owned `NamedRoutes` record with `RelayPage` and terminal `MultiVerb`, its typed success/error response list and hand-written `AsUnion`, the two-column `SortSpec`, and the handler's `paginate` call. Follow it with one line: `just example` boots a complete runnable version. The snippet uses postpositive qualified imports, strict unprefixed fields, explicit deriving strategies, and `MultilineStrings` where it embeds multiline SQL.
 - **Package map**: a short table of the four packages — `relay-pagination` (wire types + cursor codec, dependency-light), `relay-pagination-servant` (the combinator, server/client/link/OpenAPI 3.1 instances), `relay-pagination-hasql` (the keyset engine), `relay-pagination-conformance` (the walker services run against their own endpoints) — plus a line noting `examples/members-server` is unreleased.
 - **Badges/links placeholder**: an HTML comment `<!-- badges: hackage/CI badges once published -->` at the top so the spot is reserved without fabricating URLs.
 - **Guides pointer**: links to `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/`.
 - **Release status**: the release-order note per the Decision Log — core/hasql/conformance are Hackage-ready; `relay-pagination-servant` is blocked until `openapi-hs`/`servant-openapi-hs` (currently a `source-repository-package` pin on `https://github.com/shinzui/openapi-hs.git`) are published to Hackage; `relay-pagination-conformance`'s dependency on the unpublished `ephemeral-pg` is confined to its test components and does not block its release.
-- **Requirements and license**: GHC ≥ 9.6 (`base >= 4.18`), hasql 1.10.x, servant 0.20.3; BSD-3-Clause.
+- **Requirements and license**: GHC 9.12.4 or newer (`default-language: GHC2024`, `base >= 4.21`), hasql 1.10.x, servant 0.20.3; BSD-3-Clause.
 
 Create `CHANGELOG.md` in each of the four package directories (per the Decision Log: per-package, not top-level), each starting with the PVP pointer line and an `## 0.1.0.0 — unreleased` section summarizing the package's initial contents; add `extra-doc-files: CHANGELOG.md` to each `.cabal` file. Acceptance: README renders correctly (view it), quickstart code matches the example, all four changelogs exist and are referenced from their cabal files. Commit as `docs: add README and per-package changelogs`.
 
@@ -354,8 +410,8 @@ Scope: make the library discoverable from the user's other projects. Write `mori
 
 - `project`: name `relay-pagination`, namespace `shinzui`, type `Library`, language `Haskell`, lifecycle `Experimental` (pre-release), domains `[ "pagination", "web", "database" ]`, owners `[ "Nadeem Bitar" ]`, description "Relay-compliant cursor (keyset) pagination for servant and hasql REST APIs — combinator, engine, conformance suite, and OpenAPI 3.1 support".
 - `repos`: one `Schema.Repo::{ name = "relay-pagination", github = Some "shinzui/relay-pagination", localPath = Some "." }`.
-- `packages`: four `Schema.Package::` entries, one per released package, each with `language = Schema.Language.Haskell`, `path = Some "<dir>"`, a one-line description, and `dependencies` naming the notable ones (`servant/servant` and `shinzui/openapi-hs` for the servant package, `hasql/hasql` for the hasql package). Do not list the example package.
-- `dependencies` (project-level): `[ "servant/servant", "hasql/hasql", "shinzui/openapi-hs", "shinzui/ephemeral-pg" ]` (adjust qualified names to what `mori registry list` actually shows for those projects — check before writing).
+- `packages`: four `Schema.Package::` entries, one per released package, each with `language = Schema.Language.Haskell`, `path = Some "<dir>"`, a one-line description, and `dependencies` naming the notable ones (`haskell-servant/servant`, `shinzui/openapi-hs`, and `shinzui/servant-openapi-hs` for the servant package; `hasql/hasql` for the hasql package). Do not list the example package.
+- `dependencies` (project-level): `[ "haskell-servant/servant", "hasql/hasql", "shinzui/openapi-hs", "shinzui/servant-openapi-hs", "shinzui/ephemeral-pg" ]`. These are the qualified project names confirmed by `mori registry search` during the 2026-07-15 standards update; re-run the searches immediately before writing the manifest in case registry identities have changed.
 - `docs`: `DocRef` entries for `readme` (Guide/User → `README.md`), the developer guide (Guide/User → `docs/guides/implementing-pagination.md`), the agent guide (Guide/Agent if the schema has that audience, else User → `docs/guides/agent-guide.md`), and one changelog entry pointing at the core package's `relay-pagination/CHANGELOG.md` (Notes/User).
 
 Then register and verify, from the repo root:
@@ -374,7 +430,7 @@ If the installed `mori` predates a schema feature you need, record the workaroun
 
 Scope: the four released packages pass `cabal check` and carry proper metadata and version bounds, and the release-order constraint is documented where a releaser will see it.
 
-For each of the four `.cabal` files: ensure `cabal-version: 3.0` (or the repo's chosen baseline), `version: 0.1.0.0`, `synopsis` (one line, no trailing period per cabal check's pedantry), `description` (a paragraph), `license: BSD-3-Clause`, `license-file`, `author`/`maintainer` (Nadeem Bitar), `copyright`, `category` (use `Web` for the servant package, `Database` for the hasql package, `Web` or `Data` for core and conformance), `build-type: Simple`, `extra-doc-files: CHANGELOG.md`, and a `source-repository head` stanza pointing at `https://github.com/shinzui/relay-pagination`. Every `build-depends` entry in every *library* component gets both lower and upper bounds (prefer `^>=` caret bounds matching the versions in the freeze/build plan: `base >=4.18 && <5`, `hasql ^>=1.10`, `servant ^>=0.20.3`, etc.). Test-suite dependencies on unpublished packages (`ephemeral-pg` in the conformance and hasql test suites) may stay unbounded but must appear only in `test-suite` stanzas — grep each cabal file to confirm no library component mentions `ephemeral-pg`.
+For each of the four `.cabal` files: ensure `cabal-version: 3.0` (or the repo's chosen baseline), `version: 0.1.0.0`, `synopsis` (one line, no trailing period per cabal check's pedantry), `description` (a paragraph), `license: BSD-3-Clause`, `license-file`, `author`/`maintainer` (Nadeem Bitar), `copyright`, `category` (use `Web` for the servant package, `Database` for the hasql package, `Web` or `Data` for core and conformance), `build-type: Simple`, `extra-doc-files: CHANGELOG.md`, and a `source-repository head` stanza pointing at `https://github.com/shinzui/relay-pagination`. Every component imports the shared GHC2024 common stanza, and every `build-depends` entry in every *library* component gets both lower and upper bounds (prefer `^>=` caret bounds matching the versions in the freeze/build plan: `base >=4.21 && <5`, `hasql ^>=1.10`, `servant ^>=0.20.3`, etc.). Test-suite dependencies on unpublished packages (`ephemeral-pg` in the conformance and hasql test suites) may stay unbounded but must appear only in `test-suite` stanzas — grep each cabal file to confirm no library component mentions `ephemeral-pg`.
 
 Run, from the repo root, `cabal check` inside each package directory (cabal check operates on the package in the current directory):
 
@@ -401,6 +457,8 @@ Build everything including the example (M1 gate, and the perpetual anti-rot chec
 
 ```bash
 cabal build all
+just openapi
+git diff --exit-code -- docs/api/openapi.json
 ```
 
 Boot the example (M1):
@@ -503,16 +561,16 @@ $ curl -s 'http://localhost:8080/members?first=3&after=eyJ2IjoxLCJmIjozNTUwMjYxN
 
 Walking forward in pages of 3 through all ten rows must yield each member exactly once, and the final page (one row) must report `hasNextPage: false`. A backward request (`last=3&before=<a mid-stream cursor>`) must return edges in the same canonical (newest-first) order, not reversed.
 
-**2. OpenAPI 3.1 is served.**
+**2. OpenAPI 3.1 is served and generated deterministically.**
 
 ```console
 $ curl -s http://localhost:8080/openapi.json | jq -r .openapi
 3.1.0
 ```
 
-and the document's `/members` path lists the `first`, `after`, `last`, `before` query parameters with the Connection response schema.
+and the document's `/members` path lists exactly the `first`, `after`, `last`, `before` query parameters, stable operation id, documented 200 and 400 responses, and the `Connection Member` and `RelayPageError` schemas. `just openapi && git diff --exit-code -- docs/api/openapi.json` succeeds, and tests validate representative success and error JSON values against every referenced schema.
 
-**3. Docs and skill exist and are internally consistent.** `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md` exist; every fenced block in all three has a language tag; every Haskell block in the developer guide matches the example server's source; the SKILL.md contains no relative path pointing outside its own directory.
+**3. Docs and skill exist and are internally consistent.** `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md` exist; every fenced block in all three has a language tag; every Haskell block in the developer guide matches the example server's source; the SKILL.md contains no relative path pointing outside its own directory. All three teach GHC2024/common stanzas, postpositive qualified imports, strict unprefixed records, explicit deriving, `MultilineStrings`, domain-first `NamedRoutes`, terminal `MultiVerb`, hand-written `AsUnion`, and same-proxy deterministic OpenAPI generation where applicable.
 
 **4. Haddocks are complete.** `just haddock` (i.e. `cabal haddock all`) succeeds and reports 100% coverage for every public module of the four released packages.
 
@@ -532,4 +590,8 @@ Every step in this plan is additive and safely repeatable. Re-running `just exam
 
 This plan consumes, and must not modify, the public APIs delivered by the earlier plans (restated in full in Context and Orientation): from `relay-pagination` (module `Relay.Pagination`) the types `Cursor`, `CursorPayload`, `KeyValue`, `PageConfig`, `PageRequest`, `Direction`, `Connection`, `Edge`, `PageInfo` and functions `encodeCursor`, `decodeCursor`, `mkPageRequest`; from `relay-pagination-servant` (module `Relay.Pagination.Servant`) the `RelayPage` combinator with its `HasServer`/`HasClient`/`HasLink` and OpenAPI 3.1 instances; from `relay-pagination-hasql` (module `Relay.Pagination.Hasql`) `SortDirection`, `KeyColumn`, `KeyCodec`, `SortSpec`, the built-in codecs `int8Key`/`textKey`/`uuidKey`/`timestamptzKey`/`boolKey`, and `paginate :: SortSpec row -> PageRequest -> Snippet -> Hasql.Decoders.Row row -> Either CursorError (Hasql.Statement.Statement () (Connection row))`; from `relay-pagination-conformance` (module `Relay.Pagination.Conformance`) `checkConformance` and the `walkForward`/`walkBackward` walks, all driven through a `fetchPage :: PageRequest -> IO (Connection row)` callback. If any actual export deviates from these sketches, the deviation is reconciled *into this plan and the guides* (with a Decision Log entry), never papered over.
 
-New artifacts this plan creates and their interfaces: the executable package `examples/members-server` (executable name `members-server`, port 8080, routes `GET /members` and `GET /openapi.json`), consuming additionally `ephemeral-pg` (modules `EphemeralPg`, `EphemeralPg.Config`; local source `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`, wired via `cabal.project` the same way the test suites already use it), `warp` and `servant-server` for serving, and `openapi-hs`/`servant-openapi-hs` 4.1.0 (modules `Data.OpenApi`, `Servant.OpenApi`; git pin `https://github.com/shinzui/openapi-hs.git` already present in `cabal.project` since EP-1 — this plan adds no new pins). Two `Justfile` recipes: `example` (runs `cabal run members-server`) and `haddock` (runs `cabal haddock all`). One `mori.dhall` at the repo root conforming to the `mori-schema` `package.dhall` (same pinned import as the sibling `kafka-effectful`/`ephemeral-pg` files), registered via `mori registry register` and verified via `mori show --full`. Documentation artifacts: `README.md`, four per-package `CHANGELOG.md` files, `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md`. Nothing in this plan adds a dependency to any released package's library component; that invariant is what keeps `cabal check` clean and the release order achievable.
+New artifacts this plan creates and their interfaces: the unreleased library/executable/test package `examples/members-server` (example library containing the shared `Example.*` modules, executables `members-server` and `members-openapi`, test suite `members-server-test`, port 8080, routes `GET /members` and `GET /openapi.json`, checked artifact `docs/api/openapi.json`), consuming additionally `ephemeral-pg` (modules `EphemeralPg`, `EphemeralPg.Config`; local source `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`, wired via `cabal.project` the same way the test suites already use it), `warp` and `servant-server` for serving, `relay-pagination-conformance` only in the test component, and `openapi-hs`/`servant-openapi-hs` 4.1.0 (modules `Data.OpenApi`, `Servant.OpenApi`; git pin `https://github.com/shinzui/openapi-hs.git` already present in `cabal.project` since EP-1 — this plan adds no new pins). Three `Justfile` recipes: `example` (runs `cabal run members-server`), `openapi` (runs `cabal run members-openapi`), and `haddock` (runs `cabal haddock all`). One `mori.dhall` at the repo root conforming to the `mori-schema` `package.dhall` (same pinned import as the sibling `kafka-effectful`/`ephemeral-pg` files), registered via `mori registry register` and verified via `mori show --full`. Documentation artifacts: `README.md`, four per-package `CHANGELOG.md` files, `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md`. Nothing in this plan adds a dependency to any released package's library component; that invariant is what keeps `cabal check` clean and the release order achievable.
+
+## Revision Notes
+
+- 2026-07-15: Cascaded the Haskell conventions in ADR 1 through the runnable example, human and agent guides, README quickstart, Cabal/release requirements, and validation. The revision adopts GHC 9.12.4+/GHC2024, shared component baselines, postpositive qualified imports, strict records and explicit deriving, `MultilineStrings`, component-specific dependency sets, domain-owned `NamedRoutes`, terminal `MultiVerb` with manual `AsUnion`, a real example conformance test, and same-proxy deterministic OpenAPI generation with drift and schema checks.

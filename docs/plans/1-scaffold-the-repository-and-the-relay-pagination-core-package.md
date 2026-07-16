@@ -114,8 +114,12 @@ Use this checklist to track granular steps. Update it at every stopping point.
   Rationale: The MasterPlan's EP-3 sketch has `fromKeyValue :: KeyValue -> Either CursorError v` in `KeyCodec`; defining the constructors now means EP-3 extends behavior without changing this package's types, keeping core's API stable for parallel EP-2/EP-3 work.
   Date: 2026-07-15
 
-- Decision: The cabal common stanza enables `StrictData` plus the extension set copied from `ephemeral-pg` (`BlockArguments`, `DeriveAnyClass`, `DerivingStrategies`, `DuplicateRecordFields`, `LambdaCase`, `NoFieldSelectors`, `OverloadedRecordDot`, `OverloadedStrings`, `RecordWildCards`, `StrictData`); record fields are additionally written with explicit `!` bangs matching the MasterPlan sketch.
-  Rationale: Follows the sibling library's house style so the fleet reads uniformly; `StrictData` guarantees strictness even if a bang is forgotten, and the explicit bangs keep the source self-documenting.
+- Decision: Every Cabal component imports a shared `common` stanza with `default-language: GHC2024` and baseline extensions `DeriveAnyClass`, `DuplicateRecordFields`, `OverloadedLabels`, and `OverloadedStrings`; additional extensions are added only to the component or module that needs them. Record fields retain explicit `!` bangs and deriving clauses retain explicit strategies.
+  Rationale: This is the current baseline in `mori://shinzui/haskell-jitsurei/docs/core-standards`. GHC2024 already supplies extensions the older draft listed redundantly, while removing blanket `RecordWildCards`, `NoFieldSelectors`, and `OverloadedRecordDot` keeps language features intentional. Explicit bangs keep strictness visible at the public API even without global `StrictData`.
+  Date: 2026-07-15
+
+- Decision: Do not add a custom `Relay.Pagination.Prelude`, `lens`, or `generic-lens` in v1; use explicit, postpositive-qualified imports, ordinary field selection for reads, and record construction for new project-owned values, with no record update syntax on project-owned records. A focused third-party configuration update remains allowed when it is the dependency's documented API.
+  Rationale: The custom-prelude and generic-lens patterns in `haskell-jitsurei` target applications with pervasive shared imports and updates. This package family consists of small public libraries with distinct dependency budgets; adding those dependencies solely for internal access would weaken the dependency-light core constraint. `docs/adr/1-haskell-language-and-api-conventions.md` records this scoped exception and its revisit condition.
   Date: 2026-07-15
 
 - Decision: Stub packages carry their real dependency bounds now (`servant >=0.20.3 && <0.21`, `hasql >=1.10.3 && <1.11`) and each stub module contains a type alias that actually uses those imports.
@@ -140,9 +144,9 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - *base64url*: the URL-safe base64 alphabet from RFC 4648 section 5 (`-` and `_` instead of `+` and `/`). We use it **unpadded** (no trailing `=`).
 - *Nix flake / dev shell*: `flake.nix` declares the project's development environment; `nix develop` drops you into a shell with GHC 9.12.4, cabal, HLS, and the formatters, so nothing needs global installation.
 - *fourmolu*: the Haskell source formatter, configured by `fourmolu.yaml`. *treefmt*: a multi-language formatting driver wired into `nix fmt` (runs fourmolu, cabal-gild for `.cabal` files, and nixpkgs-fmt for `.nix` files). *pre-commit hook*: a git hook, installed automatically by the dev shell, that runs treefmt before every commit.
-- *GHC2021*: the language edition set via `default-language: GHC2021` in the cabal files (a curated bundle of stable extensions). Note it does **not** include `DataKinds`, which one stub module needs explicitly.
+- *GHC2024*: the language edition set via `default-language: GHC2024` in every Cabal component. The repository requires GHC 9.12.4 or newer; its `base` lower bound is therefore 4.21. GHC2024 supplies `DataKinds`, `DerivingStrategies`, `ImportQualifiedPost`, `LambdaCase`, and `TypeOperators` without per-module pragmas.
 
-**Convention source.** The sibling library `ephemeral-pg` (local path `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`) defines the house conventions this repo mirrors: a thin flake-parts flake over the `github:shinzui/haskell-nix-dev` base flake (GHC 9.12.4 toolchain), GHC2021 with a standard warnings stanza, fourmolu, a `Justfile`, and BSD-3-Clause "Copyright (c) 2025, Nadeem Bitar". Every file this plan asks you to create is quoted in full below, so you never need to open `ephemeral-pg` — but if a question arises that this plan does not answer, that repo is the tiebreaker.
+**Convention sources and ADRs.** The environment mechanics still mirror the sibling library `ephemeral-pg` (local path `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`): a thin flake-parts flake over `github:shinzui/haskell-nix-dev`, fourmolu, a `Justfile`, and BSD-3-Clause licensing. Haskell source and Cabal conventions instead follow the current registered corpus at `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-record-patterns`, and `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`. Read `docs/adr/1-haskell-language-and-api-conventions.md` before implementation; it is the relevant pre-existing ADR and records the dependency-light exception to the corpus's custom-prelude pattern.
 
 **The contract this plan implements.** The MasterPlan's Integration Points section is the canonical API sketch; it is restated in full in Interfaces and Dependencies below and the implementation must match it. Any deviation must be recorded in this plan's Decision Log *and* cascaded to the MasterPlan (EP-2, EP-3, EP-4 consume these types). One refinement has already been made (the `Cursor` representation — see Decision Log).
 
@@ -169,9 +173,9 @@ eyJ2IjoxLCJmIjozMDU0MTk4OTYsImsiOlt7InQiOiJ0cyIsInYiOjE3MjAwMDAwMDAxMjM0NTZ9LHsi
 
 A second, smaller example used throughout the tests: `CursorPayload 1 1 [KvInt 7]` → JSON `{"v":1,"f":1,"k":[{"t":"i","v":7}]}` → wire `eyJ2IjoxLCJmIjoxLCJrIjpbeyJ0IjoiaSIsInYiOjd9XX0`. Changing this format ever again requires a version bump (`"v":2`) plus Decision Log and ADR entries.
 
-**Dependency budget (normative for the core package).** `relay-pagination` may depend only on: `base`, `aeson`, `bytestring`, `base64-bytestring`, `text`, `uuid-types`. Deliberately absent: `servant` (HTTP instances live in `relay-pagination-servant`), `hasql`, `time` (timestamps are `Int64` microseconds; conversion to `UTCTime` is the SQL layer's business in EP-3), `scientific` (aeson's own bounded-integer parsers cover `Int64`/`Word32`/`Word8`), and `Double` anywhere in the cursor (float precision loss must be unrepresentable).
+**Dependency budget (normative for the core package).** `relay-pagination` may depend only on: `base`, `aeson`, `bytestring`, `base64-bytestring`, `text`, `uuid-types`. Deliberately absent: `servant` (HTTP instances live in `relay-pagination-servant`), `hasql`, `time` (timestamps are `Int64` microseconds; conversion to `UTCTime` is the SQL layer's business in EP-3), `scientific` (aeson's own bounded-integer parsers cover `Int64`/`Word32`/`Word8`), `lens`, `generic-lens`, and `Double` anywhere in the cursor (float precision loss must be unrepresentable).
 
-**Ecosystem versions.** GHC 9.12.4 (from the `haskell-nix-dev` base flake), `base >= 4.18`, hasql 1.10.3, servant 0.20.3.0, openapi-hs / servant-openapi-hs 4.1.0 (pinned by commit; used by EP-2, only pinned here).
+**Ecosystem versions.** GHC 9.12.4 (from the `haskell-nix-dev` base flake), `base >= 4.21`, hasql 1.10.3, servant 0.20.3.0, openapi-hs / servant-openapi-hs 4.1.0 (pinned by commit; used by EP-2, only pinned here).
 
 **Git conventions for this repo.** Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, … with optional scope). Commit directly to the current branch (no feature branches unless explicitly requested). Every commit in this plan carries these trailers, verbatim, as the last lines of the commit message:
 
@@ -513,18 +517,12 @@ common warnings
 
 common lang
   import: warnings
-  default-language: GHC2021
+  default-language: GHC2024
   default-extensions:
-    BlockArguments
     DeriveAnyClass
-    DerivingStrategies
     DuplicateRecordFields
-    LambdaCase
-    NoFieldSelectors
-    OverloadedRecordDot
+    OverloadedLabels
     OverloadedStrings
-    RecordWildCards
-    StrictData
 
 library
   import: lang
@@ -537,7 +535,7 @@ library
 
   build-depends:
     aeson >=2.2 && <2.3,
-    base >=4.18 && <5,
+    base >=4.21 && <5,
     base64-bytestring >=1.2 && <1.3,
     bytestring >=0.11 && <0.13,
     text >=2.0 && <2.2,
@@ -603,25 +601,19 @@ common warnings
 
 common lang
   import: warnings
-  default-language: GHC2021
+  default-language: GHC2024
   default-extensions:
-    BlockArguments
     DeriveAnyClass
-    DerivingStrategies
     DuplicateRecordFields
-    LambdaCase
-    NoFieldSelectors
-    OverloadedRecordDot
+    OverloadedLabels
     OverloadedStrings
-    RecordWildCards
-    StrictData
 
 library
   import: lang
   hs-source-dirs: src
   exposed-modules: Relay.Pagination.Servant
   build-depends:
-    base >=4.18 && <5,
+    base >=4.21 && <5,
     relay-pagination,
     servant >=0.20.3 && <0.21,
 
@@ -636,8 +628,6 @@ test-suite relay-pagination-servant-test
 with `relay-pagination-servant/src/Relay/Pagination/Servant.hs`:
 
 ```haskell
-{-# LANGUAGE DataKinds #-}
-
 -- | Stub for EP-2 (the RelayPage combinator). Its purpose today is to prove
 -- that the servant 0.20.3 dependency footprint solves alongside the rest of
 -- the project. Everything here may be replaced by EP-2.
@@ -652,7 +642,7 @@ import Servant.API (Get, JSON)
 type RelayPageStub payload = Get '[JSON] (Connection payload)
 ```
 
-(`DataKinds` is needed for the `'[JSON]` type-level list and is not part of GHC2021, hence the explicit pragma. In M2, while `Connection` does not exist yet, use `type RelayPageStub payload = Get '[JSON] payload` and add the `Connection` wrapping in M3.)
+(GHC2024 includes `DataKinds`, so the `'[JSON]` type-level list needs no explicit pragma. In M2, while `Connection` does not exist yet, use `type RelayPageStub payload = Get '[JSON] payload` and add the `Connection` wrapping in M3.)
 
 Create `relay-pagination-hasql/relay-pagination-hasql.cabal` — identical `common` stanzas and metadata pattern (synopsis "Hasql keyset-pagination engine for Relay-style cursors (stub until EP-3)", category "Database, Web"), with:
 
@@ -662,7 +652,7 @@ library
   hs-source-dirs: src
   exposed-modules: Relay.Pagination.Hasql
   build-depends:
-    base >=4.18 && <5,
+    base >=4.21 && <5,
     hasql >=1.10.3 && <1.11,
     relay-pagination,
 
@@ -692,7 +682,7 @@ type PaginateStub row = PageRequest -> Statement () (Connection row)
 
 (In M2, before `Connection`/`PageRequest` exist, use `type PaginateStub row = Statement () row` and upgrade in M5 when `PageRequest` lands.)
 
-Create `relay-pagination-conformance/relay-pagination-conformance.cabal` — same pattern (synopsis "Conformance walker proving no-skip/no-duplicate pagination (stub until EP-4)", category "Testing, Web"), library depends only on `base >=4.18 && <5` and `relay-pagination`, exposed module `Relay.Pagination.Conformance`, plus the same trivial test suite. Source file `relay-pagination-conformance/src/Relay/Pagination/Conformance.hs`:
+Create `relay-pagination-conformance/relay-pagination-conformance.cabal` — same pattern (synopsis "Conformance walker proving no-skip/no-duplicate pagination (stub until EP-4)", category "Testing, Web"), library depends only on `base >=4.21 && <5` and `relay-pagination`, exposed module `Relay.Pagination.Conformance`, plus the same trivial test suite. Source file `relay-pagination-conformance/src/Relay/Pagination/Conformance.hs`:
 
 ```haskell
 -- | Stub for EP-4 (the conformance walker). The FetchPage callback type is
@@ -826,8 +816,8 @@ data CursorPayload = CursorPayload
   deriving stock (Eq, Show)
 
 instance Aeson.ToJSON CursorPayload where
-  toJSON p = Aeson.object ["v" .= p.version, "f" .= p.fingerprint, "k" .= p.keys]
-  toEncoding p = Aeson.pairs ("v" .= p.version <> "f" .= p.fingerprint <> "k" .= p.keys)
+  toJSON p = Aeson.object ["v" .= version p, "f" .= fingerprint p, "k" .= keys p]
+  toEncoding p = Aeson.pairs ("v" .= version p <> "f" .= fingerprint p <> "k" .= keys p)
 
 instance Aeson.FromJSON CursorPayload where
   parseJSON = Aeson.withObject "CursorPayload" \o ->
@@ -868,8 +858,8 @@ data Edge a = Edge
   deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic)
 
 instance Aeson.ToJSON a => Aeson.ToJSON (Edge a) where
-  toJSON e = Aeson.object ["node" .= e.node, "cursor" .= e.cursor]
-  toEncoding e = Aeson.pairs ("node" .= e.node <> "cursor" .= e.cursor)
+  toJSON e = Aeson.object ["node" .= node e, "cursor" .= cursor e]
+  toEncoding e = Aeson.pairs ("node" .= node e <> "cursor" .= cursor e)
 
 instance Aeson.FromJSON a => Aeson.FromJSON (Edge a) where
   parseJSON = Aeson.withObject "Edge" \o -> Edge <$> o .: "node" <*> o .: "cursor"
@@ -887,17 +877,17 @@ data PageInfo = PageInfo
 instance Aeson.ToJSON PageInfo where
   toJSON p =
     Aeson.object
-      [ "hasNextPage" .= p.hasNextPage
-      , "hasPreviousPage" .= p.hasPreviousPage
-      , "startCursor" .= p.startCursor
-      , "endCursor" .= p.endCursor
+      [ "hasNextPage" .= hasNextPage p
+      , "hasPreviousPage" .= hasPreviousPage p
+      , "startCursor" .= startCursor p
+      , "endCursor" .= endCursor p
       ]
   toEncoding p =
     Aeson.pairs
-      ( "hasNextPage" .= p.hasNextPage
-          <> "hasPreviousPage" .= p.hasPreviousPage
-          <> "startCursor" .= p.startCursor
-          <> "endCursor" .= p.endCursor
+      ( "hasNextPage" .= hasNextPage p
+          <> "hasPreviousPage" .= hasPreviousPage p
+          <> "startCursor" .= startCursor p
+          <> "endCursor" .= endCursor p
       )
 
 instance Aeson.FromJSON PageInfo where
@@ -917,8 +907,8 @@ data Connection a = Connection
   deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic)
 
 instance Aeson.ToJSON a => Aeson.ToJSON (Connection a) where
-  toJSON c = Aeson.object ["edges" .= c.edges, "pageInfo" .= c.pageInfo]
-  toEncoding c = Aeson.pairs ("edges" .= c.edges <> "pageInfo" .= c.pageInfo)
+  toJSON c = Aeson.object ["edges" .= edges c, "pageInfo" .= pageInfo c]
+  toEncoding c = Aeson.pairs ("edges" .= edges c <> "pageInfo" .= pageInfo c)
 
 instance Aeson.FromJSON a => Aeson.FromJSON (Connection a) where
   parseJSON = Aeson.withObject "Connection" \o ->
@@ -986,15 +976,15 @@ decodeCursor expectedFingerprint (Cursor wire) = do
   raw <- first (const BadBase64) (Base64Url.decodeUnpadded wire)
   payload :: CursorPayload <-
     first (BadJson . Text.pack) (Aeson.eitherDecodeStrict raw)
-  if payload.version /= cursorVersion
-    then Left (WrongVersion payload.version)
+  if version payload /= cursorVersion
+    then Left (WrongVersion (version payload))
     else
-      if payload.fingerprint /= expectedFingerprint
-        then Left FingerprintMismatch {expected = expectedFingerprint, actual = payload.fingerprint}
+      if fingerprint payload /= expectedFingerprint
+        then Left FingerprintMismatch {expected = expectedFingerprint, actual = fingerprint payload}
         else Right payload
 ```
 
-Tests for this milestone (full listing in M5): the property `decodeCursor p.fingerprint (encodeCursor p) === Right p` over arbitrary version-1 payloads; the property that decoding with any *different* fingerprint yields `FingerprintMismatch`; golden encode + golden decode of the kitchen-sink and small examples; `BadBase64` on `Cursor "%%%"`; `BadJson` on the base64url of a non-payload (`Cursor "aGVsbG8"`, which is `hello`); `WrongVersion 2` on `encodeCursor (CursorPayload 2 1 [])`. Run `cabal test relay-pagination`; commit as `feat(core): versioned fingerprinted cursor codec with golden wire tests`.
+Tests for this milestone (full listing in M5): the property `decodeCursor (fingerprint p) (encodeCursor p) === Right p` over arbitrary version-1 payloads; the property that decoding with any *different* fingerprint yields `FingerprintMismatch`; golden encode + golden decode of the kitchen-sink and small examples; `BadBase64` on `Cursor "%%%"`; `BadJson` on the base64url of a non-payload (`Cursor "aGVsbG8"`, which is `hello`); `WrongVersion 2` on `encodeCursor (CursorPayload 2 1 [])`. Run `cabal test relay-pagination`; commit as `feat(core): versioned fingerprinted cursor codec with golden wire tests`.
 
 
 ### Milestone 5 — Request validation and final acceptance
@@ -1080,13 +1070,13 @@ mkPageRequest config mFirst mAfter mLast mBefore
       size <- checkedSize n
       Right PageRequest {pageSize = size, direction = Backward, cursor = mBefore}
   | Just _ <- mBefore =
-      Right PageRequest {pageSize = config.defaultPageSize, direction = Backward, cursor = mBefore}
+      Right PageRequest {pageSize = defaultPageSize config, direction = Backward, cursor = mBefore}
   | otherwise =
-      Right PageRequest {pageSize = config.defaultPageSize, direction = Forward, cursor = mAfter}
+      Right PageRequest {pageSize = defaultPageSize config, direction = Forward, cursor = mAfter}
   where
     checkedSize n
       | n < 0 = Left (NegativePageSize n)
-      | n > config.maxPageSize = Left PageSizeTooLarge {requested = n, allowedMax = config.maxPageSize}
+      | n > maxPageSize config = Left PageSizeTooLarge {requested = n, allowedMax = maxPageSize config}
       | otherwise = Right n
 ```
 
@@ -1199,12 +1189,12 @@ cursorCodecTests =
     "cursor codec"
     [ testProperty "round-trips any version-1 payload" $
         forAll arbitraryPayload \p ->
-          decodeCursor p.fingerprint (encodeCursor p) === Right p
+          decodeCursor (fingerprint p) (encodeCursor p) === Right p
     , testProperty "any other fingerprint is rejected" $
         forAll arbitraryPayload \p -> \other ->
-          other /= p.fingerprint ==>
+          other /= fingerprint p ==>
             decodeCursor other (encodeCursor p)
-              === Left FingerprintMismatch {expected = other, actual = p.fingerprint}
+              === Left FingerprintMismatch {expected = other, actual = fingerprint p}
     , testCase "golden encode: kitchen sink" $
         encodeCursor kitchenSink @?= Cursor kitchenSinkWire
     , testCase "golden decode: kitchen sink" $
@@ -1446,7 +1436,7 @@ Recovery paths for the few things that can go sideways:
 
 **What must exist at the end of M1**: no Haskell interfaces; the flake outputs `devShells.default` and `devShells.ghc9124` providing GHC 9.12.4, cabal, HLS, fourmolu (via `nix fmt`), `just`, and `postgresql` binaries.
 
-**What must exist at the end of M2**: four packages with the exact names `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, `relay-pagination-conformance`, all version 0.1.0.0, BSD-3-Clause, GHC2021, warnings stanza as listed; `cabal.project` pinning `openapi-hs` @ `965340a30fad0782f2c964ab97b4ab0f12fa044d` and `servant-openapi-hs` @ `7cbbc234cb7c0e900495b2f676e2912a7f456ff0` (both 4.1.0). The abandoned `openapi3` Hackage package must not appear anywhere in the install plan (check with `cabal build all --dry-run | grep -c openapi3` → 0 matches beyond `servant-openapi-hs`/`openapi-hs` names).
+**What must exist at the end of M2**: four packages with the exact names `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, `relay-pagination-conformance`, all version 0.1.0.0, BSD-3-Clause, GHC2024, `base >=4.21`, the shared baseline extension stanza, and the warnings stanza as listed; `cabal.project` pinning `openapi-hs` @ `965340a30fad0782f2c964ab97b4ab0f12fa044d` and `servant-openapi-hs` @ `7cbbc234cb7c0e900495b2f676e2912a7f456ff0` (both 4.1.0). The abandoned `openapi3` Hackage package must not appear anywhere in the install plan (check with `cabal build all --dry-run | grep -c openapi3` → 0 matches beyond `servant-openapi-hs`/`openapi-hs` names).
 
 **What must exist at the end of the plan** — the canonical core API, restated from the MasterPlan's Integration Points (this is the shared contract EP-2/EP-3/EP-4 import; deviations require a Decision Log entry here *and* a cascade to the MasterPlan and sibling plans):
 
@@ -1489,7 +1479,10 @@ data PageInfo     = PageInfo { hasNextPage :: !Bool, hasPreviousPage :: !Bool
                              , startCursor :: !(Maybe Cursor), endCursor :: !(Maybe Cursor) }
 ```
 
-All records are strict-field (`StrictData` + explicit bangs); all deriving uses explicit strategies (`deriving stock` for `Eq`/`Ord`/`Show`/`Generic`/`Functor`/`Foldable`/`Traversable`, `deriving newtype` where noted); `Connection`/`Edge`/`PageInfo`/`Cursor`/`KeyValue`/`CursorPayload` carry hand-written `ToJSON`/`FromJSON` producing the exact shapes pinned in Context and Orientation. `Cursor` ships from this plan with **no** `FromHttpApiData`/`ToHttpApiData` instances — EP-2's first milestone (`docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md`) adds those two instances *to this core package* (together with an `http-api-data` build-depends entry), so they live next to the `Cursor` type instead of being orphans in `relay-pagination-servant`. Nothing in this plan needs them; do not add them here.
+All records have explicit strict fields and short, unprefixed labels; all deriving uses explicit strategies (`deriving stock` for `Eq`/`Ord`/`Show`/`Generic`/`Functor`/`Foldable`/`Traversable`, `deriving newtype` where noted); qualified imports use postpositive `qualified`; and implementations do not use record update syntax on project-owned records. `Connection`/`Edge`/`PageInfo`/`Cursor`/`KeyValue`/`CursorPayload` carry hand-written `ToJSON`/`FromJSON` producing the exact shapes pinned in Context and Orientation. `Cursor` ships from this plan with **no** `FromHttpApiData`/`ToHttpApiData` instances — EP-2's first milestone (`docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md`) adds those two instances *to this core package* (together with an `http-api-data` build-depends entry), so they live next to the `Cursor` type instead of being orphans in `relay-pagination-servant`. Nothing in this plan needs them; do not add them here.
+
+
+Revision note (2026-07-15): Applied `docs/adr/1-haskell-language-and-api-conventions.md` and the registered `haskell-jitsurei` core standards. Replaced GHC2021 and the inherited blanket extension list with GHC 9.12.4+/GHC2024, `base >=4.21`, and the required shared baseline; made strict fields, explicit deriving, postpositive qualified imports, and the project-owned no-record-update rule explicit; and documented why a custom prelude and generic-lens are not appropriate for the dependency-light v1 libraries.
 
 **Library dependencies and why**: `aeson` (>=2.2 && <2.3) — JSON encoding with `toEncoding`/`pairs` for byte-stable output and bounded-integer parsing; `base64-bytestring` (>=1.2 && <1.3) — unpadded base64url primitives (see Decision Log); `bytestring`, `text` — wire and error payloads; `uuid-types` (>=1.0 && <1.1) — the `UUID` type (aeson supplies its JSON instances). Test-only: `tasty`/`tasty-hunit`/`tasty-quickcheck` — the combined unit/golden/property tree; `quickcheck-instances` — `Arbitrary` for `UUID` and `Text`. Stub packages additionally: `servant >=0.20.3 && <0.21` and `hasql >=1.10.3 && <1.11`, present now purely to lock the install plan for EP-2/EP-3.
 

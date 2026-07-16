@@ -18,17 +18,33 @@ If durable project context changes, update or create ADRs in docs/adr/ in the sa
 ## Purpose / Big Picture
 
 After this plan, a Haskell developer using the servant web framework can declare a
-Relay-style paginated endpoint with a single type-level combinator:
+Relay-style paginated endpoint inside a named route record with a single pagination
+combinator and typed success/error outcomes:
 
 ```haskell
-type ItemsApi = "items" :> RelayPage 10 100 :> Get '[JSON] (Connection Item)
+type ItemsPageResponses =
+  '[ Respond 200 "Page of items" (Connection Item)
+   , Respond 400 "Invalid pagination" RelayPageError
+   ]
+
+data ItemsPageResult
+  = ItemsPageOk !(Connection Item)
+  | ItemsPageBadRequest !RelayPageError
+  deriving stock (Eq, Show)
+
+data ItemsRoutes mode = ItemsRoutes
+  { items :: mode :- "items" :> RelayPage 10 100
+      :> MultiVerb 'GET '[JSON] ItemsPageResponses ItemsPageResult
+  }
+  deriving stock (Generic)
 ```
 
 and get, for free: parsing and validation of the four Relay pagination query parameters
 (`first`, `after`, `last`, `before`), a handler that receives a single already-validated
-`PageRequest` value, HTTP 400 responses with a machine-readable JSON error body for every
-invalid request (garbage cursor, `first` and `last` together, page size over the maximum,
-non-positive page size), typed client functions via servant-client, typed links via
+`PageRequest` value, HTTP 400 responses using the same exported `RelayPageError` type that
+the route declares, a hand-written `AsUnion ItemsPageResponses ItemsPageResult` mapping,
+and machine-readable failures for every invalid request (garbage cursor, `first` and
+`last` together, negative page size, page size over the maximum). Typed client functions via servant-client, typed links via
 `safeLink`, and OpenAPI 3.1 documentation of all four parameters and of the response
 envelope types (`Connection`, `Edge`, `PageInfo`, `Cursor`).
 
@@ -56,12 +72,14 @@ This section must always reflect the actual current state of the work.
 - [ ] M1: `FromHttpApiData`/`ToHttpApiData` instances for `Cursor` added to the core `relay-pagination` package (with `http-api-data` added to its build-depends) and unit-tested for round-trip and bad-input rejection.
 - [ ] M1: `relay-pagination-servant` package skeleton exists (cabal file, empty modules, empty test suite), is listed in `cabal.project`, and `cabal build relay-pagination-servant` succeeds.
 - [ ] M2: `RelayPage` type and its `HasServer` instance implemented in `relay-pagination-servant/src/Relay/Pagination/Servant.hs`.
-- [ ] M2: JSON 400 error body (`{"error": ..., "param": ...}`) produced for all five invalid-request classes; error mapping documented in haddocks.
-- [ ] M2: warp/http-client server tests pass: 200 happy path, default page size applied, 400 on garbage cursor, 400 on `first`+`last`, 400 on `first` > max, 400 on `first=0`.
+- [ ] M2: exported `RelayPageError` JSON body (`code`, `message`, `retryable`, optional `parameter`) produced for all invalid-request classes; error mapping documented in haddocks.
+- [ ] M2: `ToyRoutes mode` uses `NamedRoutes` and terminal `MultiVerb`; its two-alternative result has a hand-written `AsUnion` instance.
+- [ ] M2: warp/http-client server tests pass: 200 happy path, default page size and `first=0` accepted, typed 400 on garbage cursor, `first`+`last`, negative size, and size above max.
 - [ ] M3: `ClientPage` record with smart constructors; `HasClient` and `HasLink` instances implemented.
-- [ ] M3: servant-client round-trip test passes against the warp server; `safeLink` unit test renders expected query strings.
-- [ ] M4: `Relay.Pagination.Servant.OpenApi` module with `HasOpenApi (RelayPage d m :> sub)` and orphan `ToSchema`/`ToParamSchema` instances for `Cursor`, `PageInfo`, `Edge a`, `Connection a`.
-- [ ] M4: golden OpenAPI test passes; golden file committed and shows `"openapi": "3.1.0"`.
+- [ ] M3: `genericClient` typed 200/400 round-trip passes against the named warp server; `safeLink` unit test renders expected query strings.
+- [ ] M4: `Relay.Pagination.Servant.OpenApi` module with `HasOpenApi (RelayPage d m :> sub)` and confined `ToSchema`/`ToParamSchema` instances for `Cursor`, `RelayPageError`, `PageInfo`, `Edge a`, `Connection a`.
+- [ ] M4: dedicated `relay-demo-openapi` executable writes sorted, newline-terminated JSON; checked artifact is drift-tested and shows `"openapi": "3.1.0"`.
+- [ ] M4: OpenAPI tests pin the served path set, 200/400 responses, and representative `ToJSON`/`ToSchema` agreement.
 - [ ] M5: `relay-demo` executable serves the toy API; curl transcript captured into this plan's Validation section.
 - [ ] M5: haddocks written for every exported name; fourmolu clean; full `cabal test all` green; MasterPlan registry row for EP-2 flipped to Complete and its Progress checkboxes ticked.
 - [ ] ADR distillation pass done (orphan-instance policy, error-body shape, type-level page-size config).
@@ -85,12 +103,16 @@ implementation. Provide concise evidence.
   Rationale: Defining them in the servant package would make them orphan instances that any other HTTP integration (or an application) could accidentally duplicate, causing unresolvable conflicts. `http-api-data` is a small, ubiquitous dependency (text/bytestring/time-level footprint, no servant dependency), so core stays effectively dependency-light. This slightly amends EP-1's package contract; the change is cascaded to the MasterPlan Integration Points note on core dependencies.
   Date: 2026-07-15
 
-- Decision: OpenAPI instances (`ToSchema Cursor`, `ToSchema PageInfo`, `ToSchema (Edge a)`, `ToSchema (Connection a)`, `ToParamSchema Cursor`) are orphan instances living in `relay-pagination-servant`, module `Relay.Pagination.Servant.OpenApi`.
+- Decision: OpenAPI instances (`ToSchema Cursor`, `ToSchema RelayPageError`, `ToSchema PageInfo`, `ToSchema (Edge a)`, `ToSchema (Connection a)`, `ToParamSchema Cursor`) are confined to `relay-pagination-servant`, module `Relay.Pagination.Servant.OpenApi`.
   Rationale: The core package must not depend on `openapi-hs` (dependency-light core is a MasterPlan constraint), and the instances cannot live in `openapi-hs` (it must not know about this library). Orphans are the standard escape hatch; the danger of orphans is duplicate definitions elsewhere, so this package is declared the one canonical home for these instances — no other package in this repository or downstream may define them, and the module haddock says so. The module compiles with `-Wno-orphans` locally (option on the module, not the package, so accidental orphans elsewhere still warn).
   Date: 2026-07-15
 
-- Decision: Validation failures respond 400 with a fixed machine-readable JSON body `{"error": <message>, "param": <query parameter name>}` built directly by the combinator via `delayedFailFatal err400 { errBody = ..., errHeaders = [("Content-Type","application/json")] }`, deliberately bypassing servant's `ErrorFormatters` context mechanism.
-  Rationale: A pagination client (often generated code or a frontend) needs a stable, parseable error shape, not whatever formatter a host application configured. Bypassing `ErrorFormatters` also removes the `HasContextEntry` constraint, so `RelayPage` works with `EmptyContext` and needs zero setup. `delayedFailFatal` (as opposed to `delayedFail`) aborts routing so the request cannot fall through to a sibling route — the same choice servant's own `QueryParam` makes for parse errors.
+- Decision: Validation failures respond 400 with the exported strict record `RelayPageError { code :: Text, message :: Text, retryable :: Bool, parameter :: Maybe Text }`. The combinator encodes that value directly through `delayedFailFatal err400`; repository examples declare the identical type in a `MultiVerb` 400 alternative.
+  Rationale: Pagination errors occur before a handler runs, so they cannot be constructed by the handler's result sum. They still need the same wire type as the terminal response alternative so generated clients and OpenAPI can represent the actual runtime status. `code` is stable and machine-readable, `message` is explanatory, `retryable` is always false for request validation, and `parameter` identifies the offending query argument. Bypassing host `ErrorFormatters` preserves the combinator's zero-setup property; `delayedFailFatal` prevents fallthrough to a sibling route.
+  Date: 2026-07-15
+
+- Decision: Every repository-owned Servant API is a `NamedRoutes` record and every paginated terminal is `MultiVerb`; each result sum has a hand-written `AsUnion` instance, never `GenericAsUnion`.
+  Rationale: `mori://shinzui/haskell-jitsurei/docs/api-servant-routes` makes names and typed error statuses the current convention. `NamedRoutes` removes positional handler-counting failures, while a manual `AsUnion` makes the mapping between a result constructor and its HTTP status load-bearing at compile time. `RelayPage` itself stays composable and does not force a host application's entire error tail; downstream services may extend the response list with their own 404/503/500 variants.
   Date: 2026-07-15
 
 - Decision: Client-side and link-side argument is a single `ClientPage` record (`first`/`after`/`last`/`before`, all `Maybe`) with smart constructors, not four positional `Maybe` arguments.
@@ -107,6 +129,14 @@ implementation. Provide concise evidence.
 
 - Decision: The servant layer validates only that a cursor is well-formed base64url text and decodes it to raw `Cursor` bytes; it does not decode the JSON payload or check the fingerprint. Payload/version/fingerprint validation stays in the hasql engine (EP-3), which alone knows the endpoint's sort specification.
   Rationale: The fingerprint is derived from a `SortSpec`, a hasql-layer concept the servant package must not depend on. Splitting validation this way keeps EP-2 and EP-3 independent (a MasterPlan requirement). Consequence: a syntactically valid but wrong-endpoint cursor passes the servant layer and is rejected later by the engine; EP-3 owns turning that into a client-visible error.
+  Date: 2026-07-15
+
+- Decision: Derive OpenAPI from the exact `Proxy` served by warp and write the checked JSON artifact through a dedicated `relay-demo-openapi` executable. Tests never update the artifact; they compare it for drift, assert the path/response set, and validate representative JSON values against their schemas.
+  Rationale: `mori://shinzui/haskell-jitsurei/docs/api-openapi-from-types` treats the OpenAPI document as a deterministic build artifact. A test with `--accept` is a side-effecting generator and can be skipped or run in parallel. A named executable plus `git diff --exit-code` gives CI a reproducible contract check, while schema and response assertions catch semantic drift that a version-string golden alone would miss.
+  Date: 2026-07-15
+
+- Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md`: GHC 9.12.4+/GHC2024, the shared baseline extensions, `base >=4.21`, postpositive qualified imports, strict unprefixed records, and explicit deriving strategies. Do not use `OverloadedRecordDot` for `NamedRoutes` clients; call qualified selectors as functions.
+  Rationale: These are the registered core and Servant practices. In particular, servant's `(:-)` route-field type family does not work with record-dot `HasField`, whereas selector application is supported.
   Date: 2026-07-15
 
 
@@ -136,12 +166,13 @@ dependency: it creates the toolchain (nix flake, `cabal.project`, `fourmolu.yaml
 plan consumes. Do not start this plan until EP-1's acceptance is met (its test suite
 passes). This plan never imports hasql and is implementable in parallel with EP-3.
 
-If `docs/adr/` exists when you start (EP-1 creates it), scan its filenames and read any ADR
-about the cursor wire format or core type contract, and summarize it here before coding. At
-the time of writing, no `docs/adr/` directory and no ADRs exist.
+Scan `docs/adr/` when you start. `docs/adr/1-haskell-language-and-api-conventions.md`
+already exists and is required context; also read any later ADR about the cursor wire
+format, core type contract, or error envelope, and summarize it here before coding.
 
-Toolchain facts you must match: GHC2021 as the language edition, `base >= 4.18`, servant
-0.20.3.0, formatting via fourmolu (config at repository root `fourmolu.yaml`). Enter the
+Toolchain facts you must match: GHC 9.12.4 or newer, GHC2024 as the language edition,
+`base >= 4.21`, servant 0.20.3.0, formatting via fourmolu (config at repository root
+`fourmolu.yaml`). Every component imports EP-1's shared baseline extension stanza. Enter the
 dev shell with `nix develop` at the repository root before running cabal commands.
 
 ### The Relay contract, restated
@@ -150,8 +181,8 @@ The Relay Cursor Connections Specification (from the GraphQL Relay project) defi
 pagination through four request arguments and a response envelope. We apply it to plain
 REST/JSON: the arguments become query parameters, the envelope becomes the response body.
 
-The arguments: `first` (a positive integer: page size when paging forward), `after` (an
-opaque cursor: return items after this position), `last` (a positive integer: page size
+The arguments: `first` (a non-negative integer: page size when paging forward), `after` (an
+opaque cursor: return items after this position), `last` (a non-negative integer: page size
 when paging backward), `before` (an opaque cursor: return items before this position).
 `first`/`after` page forward; `last`/`before` page backward. Per the MasterPlan decision
 (extended in this plan's Decision Log), mixing the two families — in particular supplying
@@ -221,9 +252,12 @@ the reconciliation in the Decision Log — do not fork the behavior.
 
 ```haskell
 data PageRequestError
-  = MixedDirections            -- both a forward-family and a backward-family argument given
-  | NonPositiveSize !Int       -- first/last <= 0
-  | SizeExceedsMax !Int !Int   -- requested size, configured maximum
+  = FirstAndLastBothGiven
+  | AfterAndBeforeBothGiven
+  | FirstWithBefore
+  | LastWithAfter
+  | NegativePageSize !Int
+  | PageSizeTooLarge { requested :: !Int, allowedMax :: !Int }
 ```
 
 Core types (`Connection`, `Edge`, `PageInfo`, `Cursor`, `PageRequest`) derive stock
@@ -300,11 +334,18 @@ boilerplate: `hoistClientMonad pm (Proxy @api) f . cl`.
 
 *OpenAPI.* `HasOpenApi` lives in `Servant.OpenApi` (package `servant-openapi-hs`):
 `class HasOpenApi api where toOpenApi :: Proxy api -> OpenApi`. Its internal module
-`Servant.OpenApi.Internal` exports the helpers `addParam :: Param -> OpenApi -> OpenApi`
-and `addDefaultResponse400 :: ParamName -> OpenApi -> OpenApi` that the upstream
-`QueryParam'` instance uses; our instance uses the same helpers.
+`Servant.OpenApi.Internal` exports `addParam :: Param -> OpenApi -> OpenApi`, which our
+combinator uses for the four query parameters. The terminal `MultiVerb` instance in
+`servant-openapi-hs` contributes the typed 200 and 400 responses.
 
 ### OpenAPI dependency: openapi-hs, not openapi3
+
+Before implementing the Servant and OpenAPI instances, use mori rather than relying on
+memory: run `mori registry show haskell-servant/servant --full`, `mori registry show
+shinzui/openapi-hs --full`, and `mori registry show shinzui/servant-openapi-hs --full`,
+then read the source paths mori reports. The source currently confirms servant 0.20.3's
+`NamedRoutes`, `genericClient`, `MultiVerb`, and `AsUnion` APIs and
+`servant-openapi-hs` 4.1's `HasOpenApi` instances for `NamedRoutes` and `MultiVerb`.
 
 All OpenAPI types come from **`openapi-hs` 4.1.0** (module `Data.OpenApi`) and
 **`servant-openapi-hs`** (module `Servant.OpenApi`) — maintained OpenAPI 3.1-capable forks,
@@ -319,8 +360,8 @@ fork is module-compatible with `openapi3` (`Data.OpenApi`, lenses like `type_`, 
   lens targets `Maybe OpenApiTypeValue` and you write
   `type_ ?~ OpenApiTypeSingle OpenApiString` (not `type_ ?~ OpenApiString`).
 - The document's version field is `OpenApiSpecVersion`; its `Monoid` default is 3.1.0, so a
-  `mempty`-based document serializes as `"openapi": "3.1.0"` — exactly what the golden test
-  pins. Valid versions range 3.1.0–3.1.1.
+  `mempty`-based document serializes as `"openapi": "3.1.0"` — exactly what the checked
+  artifact and semantic tests pin. Valid versions range 3.1.0–3.1.1.
 - Numeric bounds are the lenses `minimum_`/`maximum_ :: Maybe Scientific`; defaults are
   `default_ :: Maybe Value`.
 
@@ -334,9 +375,11 @@ relay-pagination-servant/
   relay-pagination-servant.cabal
   src/Relay/Pagination/Servant.hs          -- RelayPage, HasServer/HasClient/HasLink, ClientPage
   src/Relay/Pagination/Servant/OpenApi.hs  -- HasOpenApi + orphan schema instances
+  demo/ToyApi.hs                           -- one shared named API, result, server, and document
   demo/Main.hs                             -- toy warp server for the curl transcript
-  test/Main.hs                             -- tasty suite (server, client, links, golden)
-  test/golden/toy-openapi.json             -- golden OpenAPI 3.1 document
+  demo/OpenApiMain.hs                      -- deterministic artifact generator
+  test/Main.hs                             -- server, client, links, drift, and schema tests
+  test/golden/toy-openapi.json             -- checked generated OpenAPI 3.1 artifact
 ```
 
 plus two small changes outside the new directory: the package added to the root
@@ -376,15 +419,17 @@ whose base64url differs from plain base64), and `parseUrlPiece "%%%not-base64url
 returns `Left`.
 
 Second, create `relay-pagination-servant/relay-pagination-servant.cabal`. Mirror core's
-cabal conventions (same `common` stanza style, GHC2021, `-Wall`, fourmolu-clean). Library
+cabal conventions (same imported `common` stanza, GHC2024, `-Wall`, fourmolu-clean). Library
 stanza: `hs-source-dirs: src`, exposed modules `Relay.Pagination.Servant` and
-`Relay.Pagination.Servant.OpenApi`, build-depends `base >=4.18, relay-pagination, servant
+`Relay.Pagination.Servant.OpenApi`, build-depends `base >=4.21, relay-pagination, servant
 ^>=0.20.3, servant-server ^>=0.20.3, servant-client-core ^>=0.20.3, openapi-hs ^>=4.1,
 servant-openapi-hs, aeson, text, bytestring, http-api-data, http-types, wai`. Test-suite
 stanza `relay-pagination-servant-test` (type `exitcode-stdio-1.0`, `hs-source-dirs: test`,
 main `Main.hs`), adding `servant-client, warp, http-client, tasty, tasty-hunit,
-tasty-golden, aeson-pretty`. Executable stanza `relay-demo` (`hs-source-dirs: demo`,
-main `Main.hs`, depends on the library plus `warp`). Create the three Haskell files with
+aeson-pretty`. Executable stanza `relay-demo` (`hs-source-dirs: demo`,
+main `Main.hs`, depends on the library plus `warp`) and executable stanza
+`relay-demo-openapi` (`hs-source-dirs: demo`, `main-is: OpenApiMain.hs`, depending on
+`aeson-pretty`, `bytestring`, `openapi-hs`, `servant-openapi-hs`, and the library). Create the Haskell files with
 module headers and placeholder exports so everything compiles. Add
 `relay-pagination-servant/` to the `packages:` list in the root `cabal.project`. If the
 nix flake enumerates packages explicitly, add the package there too (follow whatever EP-1
@@ -407,17 +452,18 @@ instance. The complete intended shape (imports condensed; write real haddocks):
 
 module Relay.Pagination.Servant
   ( RelayPage
+  , RelayPageError (..)
   , ClientPage (..)          -- M3
   , noPageArgs, forwardPage, backwardPage  -- M3
   ) where
 
 import Control.Monad (join)
-import Data.Aeson (object, (.=))
 import Data.Aeson qualified as Aeson
 import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.Generics (Generic)
 import GHC.TypeLits (KnownNat, Nat, natVal)
 import Network.HTTP.Types (queryToQueryText)
 import Network.Wai (Request, queryString)
@@ -429,6 +475,17 @@ import Web.HttpApiData (parseQueryParam)
 --   @defSize@ is the page size used when neither @first@ nor @last@ is given;
 --   @maxSize@ is the hard upper bound (requests above it get HTTP 400).
 data RelayPage (defSize :: Nat) (maxSize :: Nat)
+
+-- | Stable 400 response emitted by pagination validation. Client code branches
+-- on 'code'; 'message' is prose; validation errors are never retryable.
+data RelayPageError = RelayPageError
+  { code :: !Text
+  , message :: !Text
+  , retryable :: !Bool
+  , parameter :: !(Maybe Text)
+  }
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 instance (KnownNat defSize, KnownNat maxSize, HasServer api context)
   => HasServer (RelayPage defSize maxSize :> api) context where
@@ -455,46 +512,62 @@ instance (KnownNat defSize, KnownNat maxSize, HasServer api context)
         mBefore <- traverse (parseCursor "before") (look "before")
         case mkPageRequest pageConfig mFirst mAfter mLast mBefore of
           Right pr  -> pure pr
-          Left  err -> delayedFailFatal (pageRequestError400 mFirst mLast err)
+          Left  err -> delayedFailFatal (pageRequestError400 mFirst mAfter mLast mBefore err)
 
       parseSize :: Text -> Text -> DelayedIO Int
       parseSize param raw = case parseQueryParam raw of
         Right n -> pure n
-        Left  e -> delayedFailFatal (relayError400 ("invalid integer: " <> e) param)
+        Left  e -> delayedFailFatal
+          (relayError400 "invalid_integer" ("invalid integer: " <> e) (Just param))
 
       parseCursor :: Text -> Text -> DelayedIO Cursor
       parseCursor param raw = case cursorFromText raw of
         Right c -> pure c
-        Left  e -> delayedFailFatal (relayError400 ("invalid cursor: " <> e) param)
+        Left  e -> delayedFailFatal
+          (relayError400 "invalid_cursor" ("invalid cursor: " <> e) (Just param))
 
--- | The machine-readable 400 body: {"error": <message>, "param": <offender>}.
-relayError400 :: Text -> Text -> ServerError
-relayError400 msg param = err400
-  { errBody    = Aeson.encode (object ["error" .= msg, "param" .= param])
+relayError400 :: Text -> Text -> Maybe Text -> ServerError
+relayError400 errorCode errorMessage offender = err400
+  { errBody = Aeson.encode RelayPageError
+      { code = errorCode
+      , message = errorMessage
+      , retryable = False
+      , parameter = offender
+      }
   , errHeaders = [("Content-Type", "application/json")]
   }
 
-pageRequestError400 :: Maybe Int -> Maybe Int -> PageRequestError -> ServerError
-pageRequestError400 mFirst _mLast = \case
-  MixedDirections ->
-    relayError400 "cannot combine forward (first/after) and backward (last/before) arguments"
-                  (if isJust mFirst then "last" else "before")
-  NonPositiveSize n ->
-    relayError400 ("page size must be >= 1, got " <> tshow n) sizeParam
-  SizeExceedsMax n mx ->
-    relayError400 ("page size " <> tshow n <> " exceeds maximum " <> tshow mx) sizeParam
+pageRequestError400
+  :: Maybe Int -> Maybe Cursor -> Maybe Int -> Maybe Cursor
+  -> PageRequestError -> ServerError
+pageRequestError400 mFirst _mAfter _mLast _mBefore = \case
+  FirstAndLastBothGiven -> mixed "last"
+  AfterAndBeforeBothGiven -> mixed "before"
+  FirstWithBefore -> mixed "before"
+  LastWithAfter -> mixed "after"
+  NegativePageSize n ->
+    relayError400 "negative_page_size" ("page size must be non-negative, got " <> tshow n)
+      (Just sizeParam)
+  PageSizeTooLarge {requested, allowedMax} ->
+    relayError400 "page_size_too_large"
+      ("page size " <> tshow requested <> " exceeds maximum " <> tshow allowedMax)
+      (Just sizeParam)
   where
     sizeParam = if isJust mFirst then "first" else "last"
+    mixed offender = relayError400 "mixed_pagination_directions"
+      "cannot combine forward (first/after) and backward (last/before) arguments"
+      (Just offender)
     tshow = T.pack . show
 ```
 
 The error-body contract to write into the haddocks (and keep stable — clients parse it):
-status is always 400; body is a JSON object with exactly two keys; `error` is a
-human-readable message; `param` is the name of one offending query parameter (`"first"`,
-`"after"`, `"last"`, or `"before"`). For family-mixing errors, `param` names the
-backward-family parameter that was present (`"last"` if given, else `"before"`). Note the
-constructor names above are this plan's assumed EP-1 shape; reconcile with the real
-`PageRequestError` when implementing (Decision Log entry if it differs).
+status is always 400; body is the JSON representation of `RelayPageError`, with exactly
+the keys `code`, `message`, `retryable`, and `parameter`. Clients branch on `code`, never
+`message`; `retryable` is false; `parameter` names one offending query parameter
+(`"first"`, `"after"`, `"last"`, or `"before"`) or is JSON null when no single parameter
+is responsible. The constructor names above match EP-1's current planned
+`PageRequestError`; reconcile against the implemented core before coding and record any
+difference in the Decision Log.
 
 Then write the server tests in `relay-pagination-servant/test/Main.hs`. Define a toy API
 whose handler echoes the received `PageRequest` into the response so assertions can see
@@ -505,22 +578,65 @@ data Item = Item { itemId :: Int, itemName :: Text }
   deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
-type ToyApi = "items" :> RelayPage 10 100 :> Get '[JSON] (Connection Item)
+type ToyPageResponses =
+  '[ Respond 200 "Page of items" (Connection Item)
+   , Respond 400 "Invalid pagination" RelayPageError
+   ]
 
-toyServer :: Server ToyApi
-toyServer pr = pure Connection
-  { edges =
-      [ Edge { node   = Item (pageSize pr) (directionText (direction pr))
-             , cursor = Cursor "edge-1" } ]
-  , pageInfo = PageInfo { hasNextPage = False, hasPreviousPage = False
-                        , startCursor = Just (Cursor "edge-1")
-                        , endCursor   = Just (Cursor "edge-1") }
+data ToyPageResult
+  = ToyPageOk !(Connection Item)
+  | ToyPageBadRequest !RelayPageError
+  deriving stock (Eq, Show)
+
+instance AsUnion ToyPageResponses ToyPageResult where
+  toUnion = \case
+    ToyPageOk value -> Z (I value)
+    ToyPageBadRequest err -> S (Z (I err))
+  fromUnion = \case
+    Z (I value) -> ToyPageOk value
+    S (Z (I err)) -> ToyPageBadRequest err
+    S (S impossible) -> case impossible of {}
+
+type ToyEndpoint = RelayPage 10 100
+  :> MultiVerb 'GET '[JSON] ToyPageResponses ToyPageResult
+
+type ToyItemsEndpoint = "items" :> ToyEndpoint
+
+data ToyRoutes mode = ToyRoutes
+  { items :: mode :- ToyItemsEndpoint
   }
-  where directionText Forward = "forward"; directionText Backward = "backward"
+  deriving stock (Generic)
+
+toyApi :: Proxy (NamedRoutes ToyRoutes)
+toyApi = Proxy
+
+toyServer :: ToyRoutes (AsServerT Handler)
+toyServer = ToyRoutes {items = serveItems}
+  where
+    serveItems pr = pure . ToyPageOk $ Connection
+      { edges =
+          [ Edge
+              { node = Item (pageSize pr) (directionText (direction pr))
+              , cursor = Cursor "edge-1"
+              }
+          ]
+      , pageInfo = PageInfo
+          { hasNextPage = False
+          , hasPreviousPage = False
+          , startCursor = Just (Cursor "edge-1")
+          , endCursor = Just (Cursor "edge-1")
+          }
+      }
+    directionText Forward = "forward"
+    directionText Backward = "backward"
 
 toyApp :: Application
-toyApp = serve (Proxy @ToyApi) toyServer     -- note: EmptyContext suffices
+toyApp = serve toyApi toyServer     -- the same Proxy is reused by client and OpenAPI
 ```
+
+Import `NamedRoutes`, `AsServerT`, `(:-)`, and the `MultiVerb` response vocabulary from
+servant's actual modules resolved through mori. The manual `AsUnion` instance is
+load-bearing: adding or reordering a response alternative must make it stop compiling.
 
 Run it with warp's `Network.Wai.Handler.Warp.testWithApplication` (binds a free port,
 passes it to the test body, shuts down after) and drive it with raw `http-client` requests
@@ -533,31 +649,38 @@ body:
 3. `GET /items?last=5&before=<valid>` where `<valid>` is
    `toUrlPiece (Cursor "anything")` — the servant layer checks only base64url shape —
    → 200; `itemId == 5`, `itemName == "backward"`.
-4. `GET /items?after=%25%25garbage` → 400; body parses as JSON; `param == "after"`;
-   `error` mentions `cursor`.
-5. `GET /items?first=5&last=5` → 400; `param == "last"`.
-6. `GET /items?first=101` → 400; `param == "first"`; `error` mentions `100`.
-7. `GET /items?first=0` → 400; `param == "first"`.
+4. `GET /items?after=%25%25garbage` → 400; body decodes as `RelayPageError`;
+   `parameter == Just "after"`, `code == "invalid_cursor"`, `retryable == False`.
+5. `GET /items?first=5&last=5` → 400; `parameter == Just "last"` and
+   `code == "mixed_pagination_directions"`.
+6. `GET /items?first=101` → 400; `parameter == Just "first"` and
+   `code == "page_size_too_large"`.
+7. `GET /items?first=0` → 200; `itemId == 0`, matching core's non-negative Relay-size
+   policy.
+8. `GET /items?first=-1` → 400; `parameter == Just "first"` and
+   `code == "negative_page_size"`.
 
-Acceptance: `cabal test relay-pagination-servant` runs these seven tests green.
+Acceptance: `cabal test relay-pagination-servant` runs these eight tests green.
 
 ### Milestone 3 — ClientPage, HasClient, and HasLink
 
 Scope: typed clients and typed links. At the end, a servant-client function generated from
-`ToyApi` round-trips against the warp server, and `safeLink` renders correct query strings.
+the same `toyApi :: Proxy (NamedRoutes ToyRoutes)` round-trips both typed outcomes against
+the warp server, and `safeLink` renders correct query strings.
 
 In `Relay.Pagination.Servant`, add the client-argument record and smart constructors
-(enable `NoFieldSelectors` and `DuplicateRecordFields` for this module so the field names
-can be the literal Relay argument names without clashing with `Prelude.last`; construct
-and consume via `OverloadedRecordDot` / record syntax):
+(the shared Cabal stanza already enables `DuplicateRecordFields`; use an explicit record
+pattern when consuming it so the literal Relay field `last` does not require
+`NoFieldSelectors` or `OverloadedRecordDot`):
 
 ```haskell
 data ClientPage = ClientPage
-  { first  :: Maybe Int
-  , after  :: Maybe Cursor
-  , last   :: Maybe Int
-  , before :: Maybe Cursor
-  } deriving stock (Eq, Show)
+  { first  :: !(Maybe Int)
+  , after  :: !(Maybe Cursor)
+  , last   :: !(Maybe Int)
+  , before :: !(Maybe Cursor)
+  }
+  deriving stock (Eq, Show)
 
 noPageArgs :: ClientPage                             -- server default, forward
 forwardPage :: Int -> Maybe Cursor -> ClientPage     -- first (+ optional after)
@@ -574,8 +697,8 @@ instance HasClient m api => HasClient m (RelayPage d mx :> api) where
   hoistClientMonad pm _ f cl = hoistClientMonad pm (Proxy @api) f . cl
 
 addPageParams :: ClientPage -> Request -> Request
-addPageParams p =
-    add "before" p.before . add "last" p.last . add "after" p.after . add "first" p.first
+addPageParams ClientPage {first, after, last, before} =
+    add "before" before . add "last" last . add "after" after . add "first" first
   where
     add :: ToHttpApiData v => Text -> Maybe v -> Request -> Request
     add name = maybe id (\v -> appendToQueryString name (Just (encodeQueryParamValue v)))
@@ -592,18 +715,22 @@ instance HasLink sub => HasLink (RelayPage d mx :> sub) where
 
 Tests to add in `test/Main.hs`:
 
-1. Round trip: `client (Proxy @ToyApi)` gives `getItems :: ClientPage -> ClientM
-   (Connection Item)`; run `getItems (forwardPage 7 Nothing)` against the
-   `testWithApplication` server via `runClientM`; assert `itemId == 7` and that the
+1. Define `toyClient :: ToyRoutes (AsClientT ClientM)` with `genericClient`. Qualified
+   selector application gives `Toy.items toyClient :: ClientPage -> ClientM
+   ToyPageResult`; do not use record-dot syntax because `(:-)` is a type-family
+   application. Run it with `forwardPage 7 Nothing` against the
+   `testWithApplication` server via `runClientM`; match `ToyPageOk connection`, assert
+   `itemId == 7`, and assert that the
    decoded `Connection` equals what the raw-HTTP test saw (this exercises core's
    `FromJSON` through servant-client).
-2. Round trip backward: `getItems (backwardPage 3 (Just (Cursor "x")))` → `itemName ==
-   "backward"`.
-3. Client hits the 400 path: `getItems ClientPage{first = Just 5, after = Nothing, last =
-   Just 5, before = Nothing}` → `runClientM` returns `Left (FailureResponse ...)` with
-   status 400 and the JSON error body (`param == "last"`). This is why `ClientPage`'s raw
-   constructor stays exported.
-4. Links: `safeLink (Proxy @ToyApi) (Proxy @ToyApi) (forwardPage 5 (Just (Cursor "ab")))`
+2. Round trip backward: `Toy.items toyClient (backwardPage 3 (Just (Cursor "x")))` →
+   `ToyPageOk` whose first node has `itemName == "backward"`.
+3. Client hits the 400 path: invoke `Toy.items toyClient ClientPage{first = Just 5,
+   after = Nothing, last = Just 5, before = Nothing}`. `runClientM` returns `Right
+   (ToyPageBadRequest err)`, not `FailureResponse`; assert the typed error's `code` and
+   `parameter`. This is the practical reason the route declares `MultiVerb`, and why
+   `ClientPage`'s raw constructor stays exported.
+4. Links: `safeLink toyApi (Proxy @ToyItemsEndpoint) (forwardPage 5 (Just (Cursor "ab")))`
    renders (via `toUrlPiece`) to `items?first=5&after=YWI` (check the exact base64url of
    `"ab"` when writing the test), and `noPageArgs` renders to `items` with no query
    string.
@@ -612,15 +739,16 @@ Acceptance: `cabal test relay-pagination-servant` green with the new tests.
 
 ### Milestone 4 — OpenAPI 3.1: HasOpenApi and schema instances, golden-tested
 
-Scope: generated documentation. At the end, `toOpenApi (Proxy @ToyApi)` yields a complete
-OpenAPI 3.1 document pinned by a golden file.
+Scope: generated documentation. At the end, `toOpenApi toyApi` yields a complete
+OpenAPI 3.1 document from the same `toyApi` value passed to `serve`, and a dedicated
+executable writes the checked artifact deterministically.
 
 Create `relay-pagination-servant/src/Relay/Pagination/Servant/OpenApi.hs` with
 `{-# OPTIONS_GHC -Wno-orphans #-}` and a module haddock declaring it the canonical (sole
 permitted) home of OpenAPI instances for the core types. Contents:
 
-The parameter documentation on the combinator (helpers `addParam` and
-`addDefaultResponse400` come from `Servant.OpenApi.Internal`):
+The parameter documentation on the combinator uses `addParam` from
+`Servant.OpenApi.Internal`:
 
 ```haskell
 instance (KnownNat d, KnownNat mx, HasOpenApi sub)
@@ -629,14 +757,12 @@ instance (KnownNat d, KnownNat mx, HasOpenApi sub)
     toOpenApi (Proxy @sub)
       & addParam firstParam & addParam afterParam
       & addParam lastParam  & addParam beforeParam
-      & addDefaultResponse400 "first" & addDefaultResponse400 "after"
-      & addDefaultResponse400 "last"  & addDefaultResponse400 "before"
     where
       defSize = natVal (Proxy @d); maxSize = natVal (Proxy @mx)
 
       sizeSchema = mempty
         & type_    ?~ OpenApiTypeSingle OpenApiInteger
-        & minimum_ ?~ 1
+        & minimum_ ?~ 0
         & maximum_ ?~ fromInteger maxSize
 
       cursorSchema = toParamSchema (Proxy @Cursor)   -- string / base64url, defined below
@@ -646,12 +772,12 @@ instance (KnownNat d, KnownNat mx, HasOpenApi sub)
         & description ?~ d & schema ?~ Inline sch
 
       firstParam  = queryParam "first"
-        ("Forward page size (1.." <> tshow maxSize <> "). Defaults to "
+        ("Forward page size (0.." <> tshow maxSize <> "). Defaults to "
           <> tshow defSize <> " when neither 'first' nor 'last' is given. "
           <> "Cannot be combined with 'last' or 'before'.")
         (sizeSchema & default_ ?~ toJSON defSize)
       lastParam   = queryParam "last"
-        ("Backward page size (1.." <> tshow maxSize
+        ("Backward page size (0.." <> tshow maxSize
           <> "). Cannot be combined with 'first' or 'after'.")
         sizeSchema
       afterParam  = queryParam "after"
@@ -661,6 +787,11 @@ instance (KnownNat d, KnownNat mx, HasOpenApi sub)
         "Opaque cursor: return items before this position (backward pagination)."
         cursorSchema
 ```
+
+Do not add a synthetic default 400 response in this instance. The terminal `MultiVerb`
+declares `Respond 400 ... RelayPageError`, and `servant-openapi-hs` derives the response
+schema from that type. This makes a plain `Get` terminal visibly incomplete rather than
+letting documentation pretend its client can decode an error the route type omitted.
 
 The schema instances for the envelope types — all orphans, per the Decision Log:
 
@@ -677,6 +808,7 @@ instance ToSchema Cursor where
       & format      ?~ "base64url"
       & description ?~ "opaque pagination cursor"
 
+instance ToSchema RelayPageError
 instance ToSchema PageInfo                                -- generic
 instance ToSchema a => ToSchema (Edge a) where
   declareNamedSchema = genericDeclareNamedSchema defaultSchemaOptions
@@ -687,41 +819,56 @@ instance ToSchema a => ToSchema (Connection a) where
 (`genericDeclareNamedSchema` from `Data.OpenApi` names applied types by their `Typeable`
 representation, e.g. `Connection_Item`, and emits `$ref`s into `components.schemas` —
 verify the exact rendered names when the golden file is first generated and record any
-surprise.)
+surprise.) Give `Item` a `ToSchema` instance next to its definition, where it is not an
+orphan.
 
-The golden test in `test/Main.hs`: render the document for the toy API deterministically
-and compare with `tasty-golden`'s `goldenVsString`:
+Move the shared toy route, result, server, and `toyApi` proxy into `demo/ToyApi.hs`; add
+that directory to the test suite's `hs-source-dirs` so the server tests, demo, and generator
+compile against one definition. Add executable `relay-demo-openapi` whose only job is to
+write `relay-pagination-servant/test/golden/toy-openapi.json`. Its generator module derives
+from `toOpenApi toyApi`, applies the stable operation id `getItems`, renders with sorted
+keys, and appends one trailing newline:
 
 ```haskell
 import Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty')
+import Data.ByteString.Lazy qualified as LBS
 
-openApiGolden :: TestTree
-openApiGolden = goldenVsString "toy API OpenAPI 3.1 document"
-  "test/golden/toy-openapi.json"
-  (pure (encodePretty' defConfig { confCompare = compare }   -- sorted keys => stable bytes
-          (toOpenApi (Proxy @ToyApi))))
+renderToyOpenApi :: LBS.ByteString
+renderToyOpenApi =
+  encodePretty' defConfig {confCompare = compare} (withOperationId "getItems" (toOpenApi toyApi))
+    <> "\n"
+
+main :: IO ()
+main = LBS.writeFile "relay-pagination-servant/test/golden/toy-openapi.json" renderToyOpenApi
 ```
 
-Generate the golden file on first run with `cabal test relay-pagination-servant
---test-options=--accept`, then *read the generated file* and verify by eye before
-committing: `"openapi": "3.1.0"`; four parameters under `paths./items.get.parameters` with
-the names, bounds (`"minimum": 1`, `"maximum": 100`), default (`"default": 10` on `first`
-only), and `"format": "base64url"` on the cursor params; `components.schemas` containing
-`Cursor`, `PageInfo`, `Edge_Item` (or the observed generic name), `Connection_Item`, and
-`Item`.
+The exact lens helper used by `withOperationId` must be implemented against the installed
+`openapi-hs` source located through mori; it changes only enrichment that the route types
+cannot carry. Generate with `cabal run relay-demo-openapi`, inspect the file, and commit it.
+Never use a test `--accept` mode to write it.
 
-Acceptance: `cabal test relay-pagination-servant` green including the golden test; the
-committed golden file contains `"openapi": "3.1.0"`.
+Tests in `test/Main.hs` are read-only. They assert that the checked bytes equal
+`renderToyOpenApi`; that the path set is exactly `["/items"]`; that the GET operation has
+both 200 and 400 responses; that its operation id is `getItems`; and that the four query
+parameters have bounds (`"minimum": 0`, `"maximum": 100`), the default (`10` on `first`
+only), and cursor format `base64url`. Apply `Data.OpenApi.validateToJSON` to representative
+`Connection Item` and `RelayPageError` values and require an empty validation-error list.
+The artifact must contain `Cursor`, `RelayPageError`, `PageInfo`, `Edge_Item` (or the
+observed generic name), `Connection_Item`, and `Item` schemas.
+
+Acceptance: `cabal run relay-demo-openapi`, then `git diff --exit-code
+relay-pagination-servant/test/golden/toy-openapi.json`, then `cabal test
+relay-pagination-servant` all succeed; the committed artifact contains `"openapi":
+"3.1.0"` and every semantic assertion above passes.
 
 ### Milestone 5 — Demo executable, curl transcript, polish, and plan closeout
 
 Scope: end-to-end human-visible proof and release hygiene. At the end, the acceptance
 anchor of this plan is demonstrably met.
 
-Write `relay-pagination-servant/demo/Main.hs`: `main = run 8080 toyApp` reusing the toy
-API (move the toy API definition into the demo's source or a shared internal module —
-simplest is to duplicate the ~30 lines in `demo/Main.hs` with a comment pointing at the
-test copy; do not export toy types from the library). Print a startup line naming the port.
+Write `relay-pagination-servant/demo/Main.hs`: `main = run 8080 toyApp`, importing the
+single shared `demo/ToyApi.hs` definition used by tests and `relay-demo-openapi`; do not
+duplicate or export toy types from the library. Print a startup line naming the port.
 Then run the server, capture the curl transcript (the exact commands and expected shapes
 are in Validation and Acceptance below), and paste the real output into that section,
 replacing the expectations if they differ (and recording any difference in Surprises).
@@ -733,7 +880,7 @@ warnings worth caring about.
 
 Closeout: tick this plan's Progress; update the MasterPlan
 (`docs/masterplans/1-relay-compliant-cursor-pagination-library-for-servant-and-hasql.md`)
-— flip EP-2's registry row to Complete and tick its three EP-2 Progress checkboxes; write
+— flip EP-2's registry row to Complete and tick its EP-2 Progress checkboxes; write
 the Outcomes & Retrospective entry; do the ADR distillation pass (candidate ADRs: orphan
 OpenAPI instance policy, the 400 error-body contract as a public API, type-level page-size
 configuration) into `docs/adr/`.
@@ -762,27 +909,32 @@ relay-pagination-servant-test
     pages backward with last+before:      OK
     400 on malformed cursor:              OK
     400 on first+last:                    OK
-    400 on first over max:                OK
-    400 on first=0:                       OK
+    typed 400 on first over max:          OK
+    accepts first=0:                      OK
+    typed 400 on first=-1:                OK
   client
-    forward round trip:                   OK
-    backward round trip:                  OK
-    server rejects mixed ClientPage:      OK
+    typed forward round trip:             OK
+    typed backward round trip:            OK
+    decodes mixed ClientPage as 400 sum:  OK
   links
     renders first+after query string:     OK
     noPageArgs renders bare path:         OK
   openapi
-    toy API OpenAPI 3.1 document:         OK
+    checked artifact matches generator:   OK
+    path and 200/400 response set:         OK
+    JSON values validate against schemas: OK
 
-All 13 tests passed
+All tests passed
 ```
 
-Regenerate the golden file after an intentional schema change (then inspect the diff
-before committing):
+Regenerate the checked artifact after an intentional schema change, inspect the diff, and
+run the drift check before committing:
 
 ```bash
-cabal test relay-pagination-servant --test-options=--accept
+cabal run relay-pagination-servant:relay-demo-openapi
 git diff relay-pagination-servant/test/golden/toy-openapi.json
+cabal run relay-pagination-servant:relay-demo-openapi
+git diff --exit-code relay-pagination-servant/test/golden/toy-openapi.json
 ```
 
 Run the demo server for the curl transcript:
@@ -813,7 +965,7 @@ Suggested commit sequence: `feat(core): render Cursor via http-api-data` +
 `chore(servant): scaffold relay-pagination-servant package` (M1);
 `feat(servant): add RelayPage combinator with HasServer and 400 JSON errors` (M2);
 `feat(servant): add ClientPage with HasClient and HasLink instances` (M3);
-`feat(servant): add OpenAPI 3.1 instances and golden document test` (M4);
+`feat(servant): derive and verify the OpenAPI 3.1 artifact` (M4);
 `docs(servant): add relay-demo server, curl transcript, and haddocks` (M5). Commit
 directly to the current branch (no feature branch) per repository convention.
 
@@ -824,10 +976,10 @@ Acceptance is behavioral. All three checks below must hold.
 
 **1. The test suite.** `cabal test relay-pagination-servant --test-show-details=direct`
 exits 0 with all tests passing, including: a 200 whose body proves the type-level default
-page size (10) reached the handler; 400s for a malformed cursor, `first`+`last`, `first`
-over the type-level max, and `first=0`, each with a parseable
-`{"error": ..., "param": ...}` JSON body; a servant-client round trip that decodes a
-`Connection Item`; and the OpenAPI golden comparison.
+page size (10) reached the handler; typed 400s for a malformed cursor, `first`+`last`, a
+negative size, and a size over the type-level maximum; acceptance of `first=0`; a
+`genericClient` round trip decoding both `ToyPageOk` and `ToyPageBadRequest`; artifact
+drift/path/response assertions; and `ToJSON`/`ToSchema` validation.
 
 **2. The curl transcript.** With `cabal run relay-pagination-servant:relay-demo` running,
 this transcript must reproduce (update this section with real output once captured):
@@ -855,20 +1007,23 @@ HTTP/1.1 400 Bad Request
 Content-Type: application/json
 
 $ curl -s 'http://localhost:8080/items?after=%25%25garbage'
-{"error":"invalid cursor: ...","param":"after"}
+{"code":"invalid_cursor","message":"invalid cursor: ...","retryable":false,"parameter":"after"}
 
 $ curl -s 'http://localhost:8080/items?first=2&last=2'
-{"error":"cannot combine forward (first/after) and backward (last/before) arguments","param":"last"}
+{"code":"mixed_pagination_directions","message":"cannot combine forward (first/after) and backward (last/before) arguments","retryable":false,"parameter":"last"}
 ```
 
-**3. The golden document.** `relay-pagination-servant/test/golden/toy-openapi.json` is
-committed and contains `"openapi": "3.1.0"`, the four query parameters with correct
-bounds/default/format as specified in Milestone 4, and `components.schemas` entries for
-`Cursor` (string, format base64url, description "opaque pagination cursor"), `PageInfo`,
-the `Edge`/`Connection` schemas, and `Item`. Verify with:
+**3. The derived document.** `relay-pagination-servant/test/golden/toy-openapi.json` is
+committed, regenerated only by `relay-demo-openapi`, and contains `"openapi": "3.1.0"`,
+the exact `/items` path, 200/400 responses, stable `getItems` operation id, four query
+parameters with correct bounds/default/format, and `components.schemas` entries for
+`Cursor`, `RelayPageError`, `PageInfo`, the `Edge`/`Connection` schemas, and `Item`.
+Regenerate and prove no drift before inspecting:
 
 ```bash
-jq '.openapi, (.paths."/items".get.parameters | map(.name))' \
+cabal run relay-pagination-servant:relay-demo-openapi
+git diff --exit-code relay-pagination-servant/test/golden/toy-openapi.json
+jq '.openapi, (.paths."/items".get.responses | keys), (.paths."/items".get.parameters | map(.name))' \
   relay-pagination-servant/test/golden/toy-openapi.json
 ```
 
@@ -876,6 +1031,7 @@ expecting:
 
 ```text
 "3.1.0"
+["200","400"]
 ["first","after","last","before"]
 ```
 
@@ -886,12 +1042,10 @@ does not match the pattern).
 
 ## Idempotence and Recovery
 
-Everything in this plan is additive and safe to repeat. `cabal build`/`cabal test` are
-idempotent. The golden test's `--accept` mode overwrites
-`relay-pagination-servant/test/golden/toy-openapi.json`; the file is under git, so an
-accidental accept is recovered with `git checkout --
-relay-pagination-servant/test/golden/toy-openapi.json`. Never run `--accept` and commit
-without reading the diff.
+Everything in this plan is additive and safe to repeat. `cabal build`, `cabal test`, and
+`cabal run relay-demo-openapi` are idempotent. The generator intentionally overwrites only
+`relay-pagination-servant/test/golden/toy-openapi.json`; always inspect its diff. Tests
+are read-only and have no `--accept` workflow.
 
 The only edits to pre-existing code are in the core package (two instances plus one
 build-depends line) and the root `cabal.project` (one packages entry); both are small,
@@ -922,7 +1076,10 @@ Cursor -> Maybe Int -> Maybe Cursor -> Either PageRequestError PageRequest`, `Co
 - M2, module `Relay.Pagination.Servant`: `data RelayPage (defSize :: Nat) (maxSize ::
   Nat)`; `instance (KnownNat defSize, KnownNat maxSize, HasServer api context) =>
   HasServer (RelayPage defSize maxSize :> api) context` with `type ServerT ... m =
-  PageRequest -> ServerT api m`.
+  PageRequest -> ServerT api m`; and `data RelayPageError = RelayPageError { code ::
+  Text, message :: Text, retryable :: Bool, parameter :: Maybe Text }` with strict fields
+  and JSON instances. The test/demo contract uses `NamedRoutes`, terminal `MultiVerb`,
+  and a hand-written `AsUnion` result mapping.
 - M3, same module: `data ClientPage = ClientPage { first :: Maybe Int, after :: Maybe
   Cursor, last :: Maybe Int, before :: Maybe Cursor }`; `noPageArgs :: ClientPage`;
   `forwardPage, backwardPage :: Int -> Maybe Cursor -> ClientPage`; `instance HasClient m
@@ -931,9 +1088,10 @@ Cursor -> Maybe Int -> Maybe Cursor -> Either PageRequestError PageRequest`, `Co
   MkLink ... a = ClientPage -> MkLink sub a`.
 - M4, module `Relay.Pagination.Servant.OpenApi`: `instance (KnownNat d, KnownNat mx,
   HasOpenApi sub) => HasOpenApi (RelayPage d mx :> sub)`; orphan `ToParamSchema Cursor`,
-  `ToSchema Cursor`, `ToSchema PageInfo`, `ToSchema a => ToSchema (Edge a)`, `ToSchema a
-  => ToSchema (Connection a)`.
-- M5: executable `relay-demo` serving the toy API on port 8080.
+  `ToSchema Cursor`, `ToSchema RelayPageError`, `ToSchema PageInfo`, `ToSchema a =>
+  ToSchema (Edge a)`, `ToSchema a => ToSchema (Connection a)`; executable
+  `relay-demo-openapi` writing the deterministic checked artifact.
+- M5: executable `relay-demo` serving the same named toy API on port 8080.
 
 **Library dependencies and why:** `relay-pagination` (the core types); `servant` and
 `servant-server` `^>=0.20.3` (`Servant.Server.Internal` for the combinator, `Servant.Links`
@@ -944,8 +1102,13 @@ pin on `https://github.com/shinzui/openapi-hs.git` in the root `cabal.project` c
 EP-1); `aeson` (error bodies); `http-api-data` (`parseQueryParam`); `http-types` and `wai`
 (query-string access inside `route`); `text`, `bytestring`. **Test-only:** `servant-client`
 (HTTP runner for round trips), `warp` (`testWithApplication`), `http-client` (raw malformed
-requests), `tasty`/`tasty-hunit`/`tasty-golden`, `aeson-pretty` (deterministic golden
-rendering, `confCompare = compare`). **Demo-only:** `warp`. Language edition GHC2021 with
-`base >= 4.18`; per-module extensions beyond it: `UndecidableInstances` (standard for
-combinator instances), and `NoFieldSelectors`/`DuplicateRecordFields`/`OverloadedRecordDot`
-where `ClientPage` is defined.
+requests), `tasty`/`tasty-hunit`, and `openapi-hs` validation helpers.
+**Demo/generator-only:** `warp`, `aeson-pretty` (deterministic rendering with
+`confCompare = compare`).
+Language edition GHC2024 with `base >= 4.21`; all components import the shared baseline
+extensions from EP-1. The combinator module additionally enables `UndecidableInstances`.
+Qualified imports are postpositive, records are explicitly strict, and `NamedRoutes`
+clients use qualified selector application rather than record-dot syntax.
+
+
+Revision note (2026-07-15): Applied `docs/adr/1-haskell-language-and-api-conventions.md` and the registered Servant/OpenAPI guidance. Updated the baseline to GHC 9.12.4+/GHC2024 and `base >=4.21`; changed the toy surface to `NamedRoutes` plus a manually mapped `MultiVerb` 200/400 result; introduced a shared exported `RelayPageError` envelope for pre-handler failures and typed clients; corrected zero-size behavior to match core; and replaced test-side golden generation with a deterministic executable, drift check, exact path/response assertions, and JSON/schema validation.
