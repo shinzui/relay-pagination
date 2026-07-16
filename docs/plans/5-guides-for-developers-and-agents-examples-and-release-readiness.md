@@ -32,8 +32,8 @@ This section must always reflect the actual current state of the work.
 - [x] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves the same OpenAPI 3.1 value (`"openapi": "3.1.0"`, paths `/members` + `/openapi.json`, operation ids `listMembers`/`getOpenApi`) that `members-openapi` writes to `docs/api/openapi.json` — proven byte-identical across two consecutive generations (2026-07-16)
 - [x] M1: Curl transcript captured from a real run and pasted into this plan (Validation section) — developer-guide copy lands with M2 (2026-07-16)
 - [x] M2: `docs/guides/implementing-pagination.md` written; every Haskell block machine-verified as a verbatim substring of the compiled example sources (scripted substring check over `examples/members-server/**/*.hs` plus the conformance `Walk` module — 9/9 blocks match); real curl transcript and real golden SQL shape included (2026-07-16)
-- [ ] M3: `docs/guides/agent-guide.md` written
-- [ ] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written with frontmatter and templates; verified self-contained (no references to files outside the skill directory except package docs)
+- [x] M3: `docs/guides/agent-guide.md` written — steps with rationale, expanded diagnoses, skill copy instructions, ADR pointers (2026-07-16)
+- [x] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written (175 lines) with the plan's exact frontmatter and inlined templates; grep-verified self-contained — no `docs/`, `examples/`, or other repo-relative paths outside the skill directory (2026-07-16)
 - [ ] M4: `README.md` written (positioning, quickstart, package map, guide pointers, release-order note)
 - [ ] M4: Per-package `CHANGELOG.md` files created for all four packages
 - [ ] M5: Haddock pass — every exported symbol across the four packages documented; `cabal haddock all` clean; `just haddock` recipe added
