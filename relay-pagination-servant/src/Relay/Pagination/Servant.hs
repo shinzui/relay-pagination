@@ -38,6 +38,10 @@
 module Relay.Pagination.Servant
   ( RelayPage,
     RelayPageError (..),
+    ClientPage (..),
+    noPageArgs,
+    forwardPage,
+    backwardPage,
   )
 where
 
@@ -53,8 +57,10 @@ import Network.HTTP.Types (queryToQueryText)
 import Network.Wai (Request, queryString)
 import Relay.Pagination
 import Servant.API ((:>))
+import Servant.Client.Core qualified as Client
+import Servant.Links (HasLink (..), Link, Param (SingleParam), addQueryParam)
 import Servant.Server.Internal
-import Web.HttpApiData (parseQueryParam)
+import Web.HttpApiData (ToHttpApiData, parseQueryParam, toQueryParam)
 
 -- | Declares the four Relay pagination query parameters on a route.
 --
@@ -126,6 +132,71 @@ instance
         Left e ->
           delayedFailFatal
             (relayError400 "invalid_cursor" ("invalid cursor: " <> e) (Just param))
+
+-- | The client- and link-side argument for a 'RelayPage' route: the four
+-- Relay parameters as one named record instead of four positional @Maybe@s
+-- (two adjacent @Maybe Int@ and two adjacent @Maybe Cursor@ positional
+-- arguments would be a swap-bug factory).
+--
+-- Prefer the smart constructors 'noPageArgs', 'forwardPage', and
+-- 'backwardPage' for the valid combinations. The raw constructor stays
+-- exported deliberately so tests can send invalid combinations and exercise
+-- the server's 400 path. Consume it with an explicit record pattern; the
+-- field named @last@ shadows 'Prelude.last' when punned.
+data ClientPage = ClientPage
+  { first :: !(Maybe Int),
+    after :: !(Maybe Cursor),
+    last :: !(Maybe Int),
+    before :: !(Maybe Cursor)
+  }
+  deriving stock (Eq, Show)
+
+-- | No pagination parameters: the server pages forward with its default size.
+noPageArgs :: ClientPage
+noPageArgs =
+  ClientPage {first = Nothing, after = Nothing, last = Nothing, before = Nothing}
+
+-- | Page forward: @first@ plus an optional @after@ cursor.
+forwardPage :: Int -> Maybe Cursor -> ClientPage
+forwardPage size mAfter =
+  ClientPage {first = Just size, after = mAfter, last = Nothing, before = Nothing}
+
+-- | Page backward: @last@ plus an optional @before@ cursor.
+backwardPage :: Int -> Maybe Cursor -> ClientPage
+backwardPage size mBefore =
+  ClientPage {first = Nothing, after = Nothing, last = Just size, before = mBefore}
+
+-- | Client functions take one 'ClientPage' and append whichever of the four
+-- parameters are present to the outgoing query string.
+instance (Client.HasClient m api) => Client.HasClient m (RelayPage d mx :> api) where
+  type Client m (RelayPage d mx :> api) = ClientPage -> Client.Client m api
+
+  clientWithRoute pm _ req page =
+    Client.clientWithRoute pm (Proxy @api) (addPageParams page req)
+
+  hoistClientMonad pm _ f cl = Client.hoistClientMonad pm (Proxy @api) f . cl
+
+addPageParams :: ClientPage -> Client.Request -> Client.Request
+addPageParams ClientPage {first, after, last, before} =
+  add "before" before . add "last" last . add "after" after . add "first" first
+  where
+    add :: (ToHttpApiData v) => Text -> Maybe v -> Client.Request -> Client.Request
+    add name =
+      maybe id (\v -> Client.appendToQueryString name (Just (Client.encodeQueryParamValue v)))
+
+-- | Links take the same 'ClientPage'; 'Servant.Links.safeLink' renders the
+-- present parameters in @first@, @after@, @last@, @before@ order.
+instance (HasLink sub) => HasLink (RelayPage d mx :> sub) where
+  type MkLink (RelayPage d mx :> sub) a = ClientPage -> MkLink sub a
+
+  toLink toA _ l page = toLink toA (Proxy @sub) (addPageLinkParams page l)
+
+addPageLinkParams :: ClientPage -> Link -> Link
+addPageLinkParams ClientPage {first, after, last, before} =
+  add "before" before . add "last" last . add "after" after . add "first" first
+  where
+    add :: (ToHttpApiData v) => String -> Maybe v -> Link -> Link
+    add name = maybe id (\v -> addQueryParam (SingleParam name (toQueryParam v)))
 
 -- | A 400 whose body is the JSON 'RelayPageError' assembled from the pieces.
 relayError400 :: Text -> Text -> Maybe Text -> ServerError

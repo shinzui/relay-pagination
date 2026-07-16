@@ -4,6 +4,7 @@ module Main (main) where
 
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy (ByteString)
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.HTTP.Client qualified as HttpClient
@@ -11,6 +12,9 @@ import Network.HTTP.Types (statusCode)
 import Network.Wai.Handler.Warp (testWithApplication)
 import Relay.Pagination
 import Relay.Pagination.Servant
+import Servant.Client (BaseUrl (..), ClientError, ClientM, Scheme (Http), mkClientEnv, runClientM)
+import Servant.Client.Generic (AsClientT, genericClient)
+import Servant.Links (safeLink)
 import Test.Tasty
 import Test.Tasty.HUnit
 import ToyApi
@@ -21,7 +25,7 @@ main =
   defaultMain $
     testGroup
       "relay-pagination-servant"
-      [serverTests]
+      [serverTests, clientTests, linkTests]
 
 -- * The RelayPage HasServer instance, over real HTTP (M2)
 
@@ -69,6 +73,71 @@ serverTests =
     -- The servant layer checks only base64url shape, so any well-formed
     -- cursor text passes it; payload validation belongs to the hasql layer.
     validCursorText = toUrlPiece (Cursor "anything")
+
+-- * The generated client, typed 200/400 round trips (M3)
+
+toyClient :: ToyRoutes (AsClientT ClientM)
+toyClient = genericClient
+
+clientTests :: TestTree
+clientTests =
+  testGroup
+    "client"
+    [ withToyClient "typed forward round trip" (forwardPage 7 Nothing) \result ->
+        case result of
+          Right (ToyPageOk conn) ->
+            -- The whole Connection, exactly as the raw-HTTP tests saw it:
+            -- this exercises core's FromJSON through servant-client.
+            conn
+              @?= Connection
+                { edges = [Edge {node = Item {itemId = 7, itemName = "forward"}, cursor = toyCursor}],
+                  pageInfo =
+                    PageInfo
+                      { hasNextPage = False,
+                        hasPreviousPage = False,
+                        startCursor = Just toyCursor,
+                        endCursor = Just toyCursor
+                      }
+                }
+          other -> assertFailure ("expected ToyPageOk, got " <> show other),
+      withToyClient "typed backward round trip" (backwardPage 3 (Just toyCursor)) \result ->
+        case result of
+          Right (ToyPageOk conn) ->
+            firstItem conn @?= Item {itemId = 3, itemName = "backward"}
+          other -> assertFailure ("expected ToyPageOk, got " <> show other),
+      withToyClient
+        "decodes mixed ClientPage as 400 sum"
+        ClientPage {first = Just 5, after = Nothing, last = Just 5, before = Nothing}
+        \result ->
+          case result of
+            Right (ToyPageBadRequest err) ->
+              -- Right, not Left FailureResponse: the practical reason the
+              -- route declares MultiVerb with a typed 400 alternative.
+              assertRelayError err "mixed_pagination_directions" (Just "last")
+            other -> assertFailure ("expected ToyPageBadRequest, got " <> show other)
+    ]
+
+withToyClient :: TestName -> ClientPage -> (Either ClientError ToyPageResult -> Assertion) -> TestTree
+withToyClient name page check =
+  testCase name $
+    testWithApplication (pure toyApp) \port -> do
+      manager <- HttpClient.newManager HttpClient.defaultManagerSettings
+      let env = mkClientEnv manager (BaseUrl Http "127.0.0.1" port "")
+      runClientM (items toyClient page) env >>= check
+
+-- * Typed links (M3)
+
+linkTests :: TestTree
+linkTests =
+  testGroup
+    "links"
+    [ testCase "renders first+after query string" $
+        toUrlPiece (safeLink toyApi (Proxy @ToyItemsEndpoint) (forwardPage 5 (Just (Cursor "YWI"))))
+          @?= "items?first=5&after=YWI",
+      testCase "noPageArgs renders bare path" $
+        toUrlPiece (safeLink toyApi (Proxy @ToyItemsEndpoint) noPageArgs)
+          @?= "items"
+    ]
 
 -- * Helpers
 
