@@ -15,6 +15,8 @@ module Relay.Pagination.Cursor
     cursorVersion,
     encodeCursor,
     decodeCursor,
+    cursorToText,
+    cursorFromText,
   )
 where
 
@@ -30,6 +32,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.UUID.Types (UUID)
 import Data.Word (Word32, Word8)
+import Web.HttpApiData (FromHttpApiData (..), ToHttpApiData (..))
 
 -- | An opaque cursor, stored exactly as it travels on the wire: unpadded
 -- base64url ASCII bytes. Construction from a payload happens only via
@@ -46,6 +49,17 @@ instance Aeson.ToJSON Cursor where
 
 instance Aeson.FromJSON Cursor where
   parseJSON = Aeson.withText "Cursor" (pure . Cursor . Text.encodeUtf8)
+
+-- | Renders the wire bytes ('cursorToText'); infallible, like the JSON
+-- encoding.
+instance ToHttpApiData Cursor where
+  toUrlPiece = cursorToText
+
+-- | Unlike the JSON instance, parsing a query parameter rejects text that is
+-- not well-formed unpadded base64url ('cursorFromText'), so an HTTP layer can
+-- answer 400 without knowing anything about the payload.
+instance FromHttpApiData Cursor where
+  parseUrlPiece = cursorFromText
 
 -- | One sort-key value inside a cursor. Exact scalar payloads only:
 -- deliberately no Double constructor, so float precision loss at page
@@ -136,6 +150,23 @@ data CursorError
 -- | Mint the wire form of a payload: compact JSON, then unpadded base64url.
 encodeCursor :: CursorPayload -> Cursor
 encodeCursor = Cursor . Base64Url.encodeUnpadded . LBS.toStrict . Aeson.encode
+
+-- | Render a cursor as text, e.g. for a query parameter. The wire bytes are
+-- already unpadded base64url ASCII, so this never fails and never needs
+-- percent-encoding.
+cursorToText :: Cursor -> Text
+cursorToText (Cursor wire) = Text.decodeUtf8Lenient wire
+
+-- | Parse cursor text received over HTTP, accepting exactly the strings
+-- 'cursorToText' produces: well-formed unpadded base64url. The payload stays
+-- opaque here — version, fingerprint, and key validation happen later, in
+-- 'decodeCursor', at the endpoint that knows its expected fingerprint.
+cursorFromText :: Text -> Either Text Cursor
+cursorFromText t =
+  let wire = Text.encodeUtf8 t
+   in case Base64Url.decodeUnpadded wire of
+        Left err -> Left ("not unpadded base64url: " <> Text.pack err)
+        Right _ -> Right (Cursor wire)
 
 -- | Decode and validate a cursor received from a client. The caller supplies
 -- the fingerprint its own sort specification expects; a cursor minted under

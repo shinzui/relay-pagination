@@ -10,13 +10,14 @@ import Test.QuickCheck.Instances ()
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
+import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 main :: IO ()
 main =
   defaultMain $
     testGroup
       "relay-pagination"
-      [keyValueJsonTests, connectionJsonTests, cursorCodecTests, pageRequestTests]
+      [keyValueJsonTests, connectionJsonTests, cursorCodecTests, httpApiDataTests, pageRequestTests]
 
 -- * KeyValue JSON shape (M3)
 
@@ -125,6 +126,31 @@ cursorCodecTests =
       \LHsidCI6ImkiLCJ2Ijo0Mn0seyJ0IjoicyIsInYiOiJhYmMifSx7InQiOiJ1IiwidiI6IjBkYzRj\
       \YTJmLTZmNmEtNGYyOC05ZjdmLTNmMmExYjJjM2Q0ZSJ9LHsidCI6ImIiLCJ2Ijp0cnVlfSx7InQi\
       \OiJuIn1dfQ"
+
+-- * Cursor http-api-data instances (EP-2 M1)
+
+httpApiDataTests :: TestTree
+httpApiDataTests =
+  testGroup
+    "Cursor http-api-data"
+    [ testCase "toUrlPiece is the wire text verbatim" $
+        toUrlPiece (Cursor "-_8A") @?= "-_8A",
+      testCase "round-trips URL-safe alphabet bytes" $
+        -- "-_8A" is base64url of [0xfb, 0xff, 0x00]; plain base64 would be "+/8A"
+        parseUrlPiece (toUrlPiece (Cursor "-_8A")) @?= Right (Cursor "-_8A"),
+      testProperty "round-trips any minted cursor" $
+        forAll arbitraryPayload \p ->
+          let c = encodeCursor p
+           in parseUrlPiece (toUrlPiece c) === Right c,
+      testCase "rejects non-base64url input" $
+        case parseUrlPiece @Cursor "%%%not-base64url!" of
+          Left _ -> pure ()
+          Right c -> assertFailure ("expected Left, got " <> show c),
+      testCase "rejects padded base64" $
+        case parseUrlPiece @Cursor "YWI=" of
+          Left _ -> pure ()
+          Right c -> assertFailure ("expected Left, got " <> show c)
+    ]
 
 -- * mkPageRequest validation matrix (M5)
 
