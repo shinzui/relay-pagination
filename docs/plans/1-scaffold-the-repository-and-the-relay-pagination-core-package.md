@@ -47,8 +47,8 @@ Use this checklist to track granular steps. Update it at every stopping point.
 - [x] M3: Cursor, KeyValue, CursorPayload types with exact JSON instances in Relay.Pagination.Cursor (2026-07-16)
 - [x] M3: Connection, Edge, PageInfo with Relay-shaped JSON in Relay.Pagination.Connection; facade module re-exports (2026-07-16)
 - [x] M3: KeyValue JSON golden tests + Connection JSON golden test pass; committed (2026-07-16: 13 tests green; Connection golden pins the wire bytes as literals until encodeCursor lands in M4)
-- [ ] M4: encodeCursor/decodeCursor + CursorError implemented
-- [ ] M4: property round-trip, wire-format golden tests (encode and decode directions), and error-case tests pass; committed
+- [x] M4: encodeCursor/decodeCursor + CursorError implemented (2026-07-16)
+- [x] M4: property round-trip, wire-format golden tests (encode and decode directions), and error-case tests pass; committed (2026-07-16: 22 tests green, kitchen-sink and small goldens byte-exact in both directions)
 - [ ] M5: Direction, PageConfig, PageRequest, PageRequestError, mkPageRequest implemented
 - [ ] M5: full validation-matrix unit tests pass; committed
 - [ ] Final acceptance: `just fmt` clean, `cabal build all` + `cabal test all` pass from scratch, GHCi demo transcript captured in this plan

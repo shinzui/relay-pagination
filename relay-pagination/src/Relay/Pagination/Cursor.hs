@@ -11,13 +11,19 @@ module Relay.Pagination.Cursor
   ( Cursor (..),
     KeyValue (..),
     CursorPayload (..),
+    CursorError (..),
     cursorVersion,
+    encodeCursor,
+    decodeCursor,
   )
 where
 
 import Data.Aeson ((.:), (.=))
 import Data.Aeson qualified as Aeson
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
+import Data.ByteString.Base64.URL qualified as Base64Url
+import Data.ByteString.Lazy qualified as LBS
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -104,3 +110,44 @@ instance Aeson.FromJSON CursorPayload where
 -- requiring a Decision Log + ADR entry.
 cursorVersion :: Word8
 cursorVersion = 1
+
+-- | Everything that can go wrong turning wire bytes back into a payload.
+-- KeyTypeMismatch / KeyCountMismatch are raised by relay-pagination-hasql's
+-- key codecs (EP-3), not by 'decodeCursor' itself; they live here so the
+-- whole cursor pipeline shares one error type.
+data CursorError
+  = BadBase64
+  | BadJson !Text
+  | WrongVersion !Word8
+  | FingerprintMismatch
+      { expected :: !Word32,
+        actual :: !Word32
+      }
+  | KeyTypeMismatch
+      { expectedTag :: !Text,
+        actualValue :: !KeyValue
+      }
+  | KeyCountMismatch
+      { expectedCount :: !Int,
+        actualCount :: !Int
+      }
+  deriving stock (Eq, Show)
+
+-- | Mint the wire form of a payload: compact JSON, then unpadded base64url.
+encodeCursor :: CursorPayload -> Cursor
+encodeCursor = Cursor . Base64Url.encodeUnpadded . LBS.toStrict . Aeson.encode
+
+-- | Decode and validate a cursor received from a client. The caller supplies
+-- the fingerprint its own sort specification expects; a cursor minted under
+-- any other specification is rejected with 'FingerprintMismatch'.
+decodeCursor :: Word32 -> Cursor -> Either CursorError CursorPayload
+decodeCursor expectedFingerprint (Cursor wire) = do
+  raw <- first (const BadBase64) (Base64Url.decodeUnpadded wire)
+  payload :: CursorPayload <-
+    first (BadJson . Text.pack) (Aeson.eitherDecodeStrict raw)
+  if version payload /= cursorVersion
+    then Left (WrongVersion (version payload))
+    else
+      if fingerprint payload /= expectedFingerprint
+        then Left FingerprintMismatch {expected = expectedFingerprint, actual = fingerprint payload}
+        else Right payload
