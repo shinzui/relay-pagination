@@ -54,7 +54,7 @@ Alternatives considered: folding the servant surface into the core package (reje
 | 2 | Servant surface: RelayPage combinator, OpenAPI 3.1 schemas, and client support | docs/plans/2-servant-surface-relaypage-combinator-openapi-3-1-schemas-and-client-support.md | EP-1 | None | Complete |
 | 3 | Hasql keyset engine: sort specifications, typed cursors, and connection building | docs/plans/3-hasql-keyset-engine-sort-specifications-typed-cursors-and-connection-building.md | EP-1 | None | Complete |
 | 4 | Conformance suite: property tests proving no-skip, no-duplicate pagination | docs/plans/4-conformance-suite-property-tests-proving-no-skip-no-duplicate-pagination.md | EP-3 | EP-2 | Complete |
-| 5 | Guides for developers and agents, examples, and release readiness | docs/plans/5-guides-for-developers-and-agents-examples-and-release-readiness.md | EP-2, EP-3, EP-4 | None | In Progress |
+| 5 | Guides for developers and agents, examples, and release readiness | docs/plans/5-guides-for-developers-and-agents-examples-and-release-readiness.md | EP-2, EP-3, EP-4 | None | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -170,13 +170,13 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - [x] EP-4 M4: Adversarial QuickCheck datasets against EP-3's engine over ephemeral-pg (2026-07-16)
 - [x] EP-4 M5: Mutation-under-walk properties (insert/delete during walk; OFFSET paginator fails) (2026-07-16)
 - [x] EP-4 M6: HTTP-level conformance through RelayPage (EP-2 was Complete; not deferred) (2026-07-16)
-- [ ] EP-5 M1: domain-first NamedRoutes/MultiVerb members example, conformance test, deterministic OpenAPI generator, runnable via just example
-- [ ] EP-5 M2: Developer guide (docs/guides/implementing-pagination.md)
-- [ ] EP-5 M3: Agent guide + copy-able agents/skills/add-paginated-endpoint skill
-- [ ] EP-5 M4: README and per-package changelogs
-- [ ] EP-5 M5: Haddock pass, just haddock
-- [ ] EP-5 M6: mori.dhall registration verified with mori show --full
-- [ ] EP-5 M7: Hackage readiness and documented release order
+- [x] EP-5 M1: domain-first NamedRoutes/MultiVerb members example, conformance test, deterministic OpenAPI generator, runnable via just example (2026-07-16)
+- [x] EP-5 M2: Developer guide (docs/guides/implementing-pagination.md), all snippets machine-verified against the example (2026-07-16)
+- [x] EP-5 M3: Agent guide + copy-able agents/skills/add-paginated-endpoint skill (2026-07-16)
+- [x] EP-5 M4: README and per-package changelogs (2026-07-16)
+- [x] EP-5 M5: Haddock pass, just haddock — 100% on every public module (2026-07-16)
+- [x] EP-5 M6: mori.dhall registration verified with mori show --full and external registry search (2026-07-16)
+- [x] EP-5 M7: Hackage readiness (cabal check clean ×4, bounds, sdists verified) and documented release order (2026-07-16)
 
 
 ## Surprises & Discoveries
@@ -194,6 +194,7 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 - While implementing EP-2 (2026-07-16): **anything that runs warp needs `ghc-options: -threaded`** — warp's TimerManager refuses to start on the single-threaded RTS and every request dies with a connection reset (`NoResponseDataReceived`). EP-4's HTTP-conformance milestone and EP-5's example server must set it on their test-suite/executable stanzas. Related gotcha: cabal may fail to relink after a `ghc-options` change (check `+RTS --info` for `rts_thr`; delete the component's `dist-newstyle` dir to force it).
 - While implementing EP-2 (2026-07-16): core (EP-1) had not shipped the `cursorToText`/`cursorFromText` helpers EP-2 assumed; EP-2 M1 added them to `Relay.Pagination.Cursor` next to the type, with the HTTP instances delegating to them. Also, `servant-openapi-hs`'s `addParam` prepends parameters, so the `HasOpenApi (RelayPage …)` instance applies the four params in reverse to document Relay order. EP-2's durable decisions (type-level page sizes, the `RelayPageError` 400 contract, the validation split with the engine, the orphan OpenAPI policy, deterministic artifacts) are distilled in `docs/adr/4-servant-pagination-surface.md`.
 - While implementing EP-4 (2026-07-16): **test-suite groups sharing a database must be `sequentialTestGroup`** — the `-threaded` RTS that warp requires makes tasty run tests concurrently, and TRUNCATE-based per-case isolation then corrupts every sibling test (all seven DB properties failed at once when the HTTP group landed). Also: a `Double` of epoch seconds round-trips microseconds *exactly* at 2026 epoch magnitudes, so lossy-cursor reproductions need single-precision `Float`; and hasql 1.10 exposes `preparable`/`unpreparable` smart constructors rather than the `Statement` data constructor. EP-4's durable contracts (library-depends-only-on-core boundary, `FetchPage` handle, walk-failure taxonomy, six invariants, teeth requirement) are distilled in `docs/adr/5-conformance-suite-boundary-and-walker-contract.md`; EP-5's example conformance test should copy the sequential-group and `-threaded` patterns.
+- While implementing EP-5 (2026-07-16): **`openapi-hs` defines no `ToSchema` instance for its own `OpenApi` type**, so any route serving the document inside the same `NamedRoutes` record that `toOpenApi` derives from needs a local orphan (the example carries one, confined per ADR 7). Also: registration is the top-level `mori register` (`mori registry register` does not exist in mori v1.0.0.0), the pinned mori-schema's `DocAudience` has no `Agent` variant (agent guide registered as `User`), a package whose executable shares its name needs the qualified `cabal run pkg:exe:name` target, and `Servant.Client.Generic` lives in `servant-client-core`, not `servant-client`.
 - During the 2026-07-15 standards review, `mori registry show shinzui/haskell-jitsurei --full` revealed that the earlier plans' GHC2021, positional Servant API, and test-written OpenAPI assumptions were stale. The registered corpus requires GHC 9.12+/GHC2024, `NamedRoutes` plus typed `MultiVerb` responses, and a dedicated type-derived OpenAPI artifact generator. These constraints were cascaded into EP-1 through EP-5 and distilled into `docs/adr/1-haskell-language-and-api-conventions.md`.
 
 
@@ -251,7 +252,15 @@ The engine wraps the base query in a subquery, appends the keyset `WHERE` in exp
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+**The initiative is complete (2026-07-16): all five ExecPlans (28 milestones) delivered, all in two days.** The Vision & Scope contract holds end-to-end: a developer (or agent) adds a paginated endpoint by declaring a `RelayPage` route in a `NamedRoutes` record, writing a base-query `Snippet`, and declaring a `SortSpec` — the library does argument validation, cursor codec + fingerprint, keyset SQL in expanded lexicographic form, `Connection` assembly, and OpenAPI 3.1. Every failure mode catalogued from the `mls-service-v2` reference implementation is either unrepresentable (no float key type; typed SQL parameters; canonical-order backward pages; probe-row PageInfo) or falsifiable (the conformance suite's six invariants, proven to have teeth against three deliberately broken paginators and an OFFSET paginator under mutation).
+
+Delivered artifacts beyond the four packages: `examples/members-server` (unreleased, CI-built, the guides' machine-checked source of truth), two guides plus a copy-able agent skill, per-package changelogs, 100% haddocks, mori registration, clean `cabal check` ×4 with verified sdists, and seven ADRs recording the durable decisions.
+
+What the decomposition got right: the EP-2 ∥ EP-3 split held perfectly — they were built in parallel sessions and met only at core's types; the conformance suite as its own plan (EP-4) paid off exactly as argued, catching the tasty-concurrency/TRUNCATE interaction and producing the OFFSET counterexample that now anchors the documentation; EP-1's insistence on byte-stable golden tests made every later "is this deterministic?" question a one-command check.
+
+What cost friction: parallel plan authoring drifted on small facts (where the Cursor HTTP instances live, `paginate`'s return type, the openapi-hs repo split) and each drift consumed a reconciliation pass — the Integration Points section and the revision notes were the mechanism that absorbed this, and they earned their keep. Plans quoting concrete API sketches went stale in small ways (missing `cursorToText`, the `ToSchema OpenApi` assumption, `mori registry register`); every one was caught by running code, never by review, which is the initiative's own thesis applied to itself.
+
+Post-completion pointers: release order and its openapi-hs blocker live in the README and ADR 6; the cursor format is v1-pinned by golden tests (bumping is a wire-breaking change per ADR 2); candidate future extensions explicitly out of v1 scope remain `totalCount`, nullable sort keys, HMAC-signed cursors, and a row-value fast path for uniform-direction specs (Decision Log requires a new entry to add any of them).
 
 
 ---

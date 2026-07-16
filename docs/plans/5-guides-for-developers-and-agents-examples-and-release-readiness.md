@@ -38,8 +38,10 @@ This section must always reflect the actual current state of the work.
 - [x] M4: Per-package `CHANGELOG.md` files created for all four packages, each with the PVP pointer and an `0.1.0.0 — unreleased` section; `extra-doc-files: CHANGELOG.md` added to all four `.cabal` files (2026-07-16)
 - [x] M5: Haddock pass — `just haddock` (recipe already existed from EP-1) reports 100% for every public module of the four released packages *and* the example. EP-1..4 had already documented nearly everything; the pass needed exactly one library fix (`conformancePassed` in `Relay.Pagination.Conformance.Check`) plus five example-module haddocks. Remaining haddock output is link-ambiguity warnings only, no errors (2026-07-16)
 - [x] M6: `mori.dhall` written at the repo root (schema pin `026ae74…` copied from `kafka-effectful`, dependency names re-confirmed via `mori registry search`); `mori validate` clean; registered; `mori show --full` displays the identity with all four packages and doc refs; `mori registry search relay-pagination` finds it from an unrelated directory; `mori registry docs shinzui/relay-pagination` lists all four doc refs (2026-07-16)
-- [ ] M7: `cabal check` clean for all four packages; version bounds on all dependencies; release-order implications documented in README and here
-- [ ] Final: ADR distillation pass into `docs/adr/`; MasterPlan registry row for EP-5 set to Complete; Outcomes & Retrospective written
+- [x] M7: `cabal check` reports "No errors or warnings could be found in the package." for all four packages (fixed: intra-repo `relay-pagination >=0.1 && <0.2` bounds in the three downstream libraries; `sop-core`/`warp`/`aeson-pretty`/`bytestring` bounds in the servant demo executables); `grep ephemeral-pg` confirms test-suite stanzas only; `cabal sdist` tarballs verified — no example files, no `ephemeral-pg` outside test stanzas, changelogs included; release order documented in README (see below) and ADR 6; full `cabal test all` green (5/5 suites) (2026-07-16)
+- [x] Final: ADR distillation — created `docs/adr/6-release-packaging-and-ordering.md` (per-package changelogs, bounds policy, release order) and `docs/adr/7-example-server-as-unreleased-ci-built-package.md` (example as guides' machine-checked source of truth, fixture realism rule, the ToSchema OpenApi orphan); MasterPlan registry row for EP-5 set to Complete; Outcomes & Retrospective written (2026-07-16)
+
+Release-order facts (also in README and ADR 6): `relay-pagination` releases first; `relay-pagination-hasql` and `relay-pagination-conformance` follow in either order (`ephemeral-pg` is test-suite-only and does not block); `relay-pagination-servant` is blocked until `openapi-hs`/`servant-openapi-hs` 4.1 are on Hackage — its bounds (`>=4.1 && <4.2`) are already written so release day is a version-bump-free upload.
 
 
 ## Surprises & Discoveries
@@ -114,7 +116,13 @@ Compare the result against the original purpose. Before marking the plan complet
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+**Outcome (2026-07-16): all seven milestones complete in one session; the plan's purpose is met in full.** A stranger cloning the repo gets: `just example` booting a real paginated server against a throwaway PostgreSQL cluster with reproducible seeded data (including the deliberate `created_at` tie straddling a page boundary); a live-captured curl transcript in the plan and developer guide; OpenAPI 3.1 served at `/openapi.json` and written deterministically (byte-identical across generations) to `docs/api/openapi.json`; a developer guide whose nine Haskell blocks are machine-verified substrings of the compiled example; an agent guide plus a grep-verified self-contained copy-able skill; a README with a verified quickstart; per-package changelogs; 100% haddock coverage on every public module (only six missing haddocks repo-wide — EP-1..4 documented as they went); mori registration verified from outside the repo; and `cabal check` clean with bounds and verified sdists for all four released packages.
+
+What deviated from the plan, and why it was cheap: the plan's `AppRoutes` sketch silently required a `ToSchema OpenApi` instance that `openapi-hs` does not define (resolved with an example-local orphan, Decision Log + ADR 7); registration is `mori register`, not `mori registry register`; the package/executable name collision made `cabal run members-server` ambiguous; `Servant.Client.Generic` lives in `servant-client-core`. All four were discovered by running things, not by review — reinforcing the plan's own thesis that compiled, executed examples are the only documentation that can be trusted.
+
+Gaps deliberately left: the example's conformance test exercises the HTTP/typed-client path only (the direct-session path is covered by EP-3/EP-4 suites); the guide's OpenAPI content-assertion tests point at EP-2's toy suite rather than duplicating them for the example; `AgentHint` in the mori schema was not used (it models agent roles, not skills). None block release readiness.
+
+Lesson worth carrying forward: the "machine-verify every quoted snippet" step (a 20-line script) caught two real README drifts that eyeballing had already accepted — the check costs less than one review round and should be standard for any guide that quotes code.
 
 
 ## Context and Orientation
