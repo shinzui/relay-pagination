@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Test.Codec qualified
+import Test.Connection qualified
 import Test.Fingerprint qualified
 import Test.SqlGolden qualified
 import Test.Tasty
@@ -10,4 +11,8 @@ main =
   defaultMain $
     testGroup
       "relay-pagination-hasql"
-      [Test.Codec.tests, Test.Fingerprint.tests, Test.SqlGolden.tests]
+      [ Test.Codec.tests,
+        Test.Fingerprint.tests,
+        Test.SqlGolden.tests,
+        Test.Connection.tests
+      ]

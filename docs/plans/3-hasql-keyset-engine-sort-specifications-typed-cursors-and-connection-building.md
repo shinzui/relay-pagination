@@ -62,8 +62,8 @@ This section must always reflect the actual current state of the work.
 - [x] M2: unit tests — codec round-trip properties (including timestamptz microsecond exactness) and fingerprint golden/sensitivity tests pass (2026-07-16: all four plan-pinned golden values — 3101933007, 2542715508, 3017546679, 3884902590 — verified independently in Python before implementation and green in the suite)
 - [x] M3: `Relay.Pagination.Hasql.Sql` generating the wrapped query snippet (`paginateSnippet`), cursor decoding against the spec (2026-07-16)
 - [x] M3: golden SQL tests for the members-like two-column mixed-direction spec, all four {Forward, Backward} × {cursor, no cursor} cases, plus a single-column spec case (2026-07-16: six golden files generated with --accept and reviewed — all match this plan's pinned SQL exactly, including the parameterized-base $1..$5 renumbering; the three cursor error paths — fingerprint, arity, type — assert exact CursorError values)
-- [ ] M4: `Relay.Pagination.Hasql.Connection` with `mintCursor` and `mkConnection`; `Relay.Pagination.Hasql.paginate` composing everything into a `Statement`
-- [ ] M4: pure unit tests of `mkConnection` covering probe/no-probe, empty page, backward reversal, and the exact-boundary `hasNextPage` regression
+- [x] M4: `Relay.Pagination.Hasql.Connection` with `mintCursor` and `mkConnection`; `Relay.Pagination.Hasql.paginate` composing everything into a `Statement` (2026-07-16: umbrella module replaces EP-1's PaginateStub with the full public API)
+- [x] M4: pure unit tests of `mkConnection` covering probe/no-probe, empty page, backward reversal, and the exact-boundary `hasNextPage` regression (2026-07-16: 8 connection tests green, 28 total)
 - [ ] M5: integration tests against ephemeral-pg — forward walk, backward walk, exact-boundary flags, microsecond-adjacent timestamps, cursor-as-parameter equality round-trip
 - [ ] M5: `demo` function runnable from GHCi showing both walk directions against a seeded table; transcript recorded in this plan
 - [ ] Final: `cabal test relay-pagination-hasql` green; MasterPlan registry status updated; ADR distillation pass done

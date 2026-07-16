@@ -63,6 +63,7 @@ test-suite relay-pagination-hasql-tests
   main-is:        Main.hs
   other-modules:
     Test.Codec
+    Test.Connection
     Test.Fingerprint
     Test.SqlGolden
 
