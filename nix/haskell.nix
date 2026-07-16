@@ -56,7 +56,10 @@
       };
     in
     {
-      packages.default = haskellPackages.callCabal2nix "relay-pagination" inputs.self { };
+      # Multi-package repo: the root has no .cabal file, so build the core
+      # package from its subdirectory.
+      packages.default =
+        haskellPackages.callCabal2nix "relay-pagination" "${inputs.self}/relay-pagination" { };
 
       devShells.default = mkProjectShell "ghc9124";
       devShells."ghc9124" = mkProjectShell "ghc9124";
