@@ -69,8 +69,8 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `FromHttpApiData`/`ToHttpApiData` instances for `Cursor` added to the core `relay-pagination` package (with `http-api-data` added to its build-depends) and unit-tested for round-trip and bad-input rejection.
-- [ ] M1: `relay-pagination-servant` package skeleton exists (cabal file, empty modules, empty test suite), is listed in `cabal.project`, and `cabal build relay-pagination-servant` succeeds.
+- [x] M1: `FromHttpApiData`/`ToHttpApiData` instances for `Cursor` added to the core `relay-pagination` package (with `http-api-data` added to its build-depends) and unit-tested for round-trip and bad-input rejection. Core lacked the assumed `cursorToText`/`cursorFromText` helpers, so M1 added them to `Relay.Pagination.Cursor` (see Decision Log). (2026-07-16)
+- [x] M1: `relay-pagination-servant` package skeleton exists (cabal file with library, test suite, and both demo executables; placeholder modules), was already listed in `cabal.project` by EP-1, and `cabal build relay-pagination-servant` succeeds. (2026-07-16)
 - [ ] M2: `RelayPage` type and its `HasServer` instance implemented in `relay-pagination-servant/src/Relay/Pagination/Servant.hs`.
 - [ ] M2: exported `RelayPageError` JSON body (`code`, `message`, `retryable`, optional `parameter`) produced for all invalid-request classes; error mapping documented in haddocks.
 - [ ] M2: `ToyRoutes mode` uses `NamedRoutes` and terminal `MultiVerb`; its two-alternative result has a hand-written `AsUnion` instance.
@@ -134,6 +134,14 @@ implementation. Provide concise evidence.
 - Decision: Derive OpenAPI from the exact `Proxy` served by warp and write the checked JSON artifact through a dedicated `relay-demo-openapi` executable. Tests never update the artifact; they compare it for drift, assert the path/response set, and validate representative JSON values against their schemas.
   Rationale: `mori://shinzui/haskell-jitsurei/docs/api-openapi-from-types` treats the OpenAPI document as a deterministic build artifact. A test with `--accept` is a side-effecting generator and can be skipped or run in parallel. A named executable plus `git diff --exit-code` gives CI a reproducible contract check, while schema and response assertions catch semantic drift that a version-string golden alone would miss.
   Date: 2026-07-15
+
+- Decision: Add `cursorToText`/`cursorFromText` to core's `Relay.Pagination.Cursor` as part of M1 (this plan had assumed EP-1 shipped them; it did not — EP-1's core exposes only the `Cursor` newtype with pass-through JSON instances). `cursorFromText` validates unpadded base64url via `Base64Url.decodeUnpadded` and keeps the payload opaque; the HTTP instances delegate to the helpers, exactly as this plan specified.
+  Rationale: The plan's own reconciliation rule ("use EP-1's actual names, adapt, do not fork the behavior"). Placing the helpers in core next to the type keeps the base64url grammar in one module and lets any HTTP layer reject malformed cursor text without importing servant.
+  Date: 2026-07-16
+
+- Decision: The `relay-pagination-servant` cabal stanzas start with only the dependencies their placeholder code uses; the full M1 dependency list from this plan (servant-server, servant-client-core, openapi-hs, wai, warp, …) lands with the milestone whose code first imports it (M2–M4).
+  Rationale: EP-1's shared `common warnings` stanza enables `-Wunused-packages`; declaring the full list against placeholder modules would emit unused-package warnings on every build until M4. Same final state, warning-clean intermediate commits.
+  Date: 2026-07-16
 
 - Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md`: GHC 9.12.4+/GHC2024, the shared baseline extensions, `base >=4.21`, postpositive qualified imports, strict unprefixed records, and explicit deriving strategies. Do not use `OverloadedRecordDot` for `NamedRoutes` clients; call qualified selectors as functions.
   Rationale: These are the registered core and Servant practices. In particular, servant's `(:-)` route-field type family does not work with record-dot `HasField`, whereas selector application is supported.

@@ -2,12 +2,14 @@ cabal-version: 3.0
 name:          relay-pagination-servant
 version:       0.1.0.0
 synopsis:
-  Servant combinator for Relay-style cursor pagination (stub until EP-2)
+  RelayPage servant combinator for Relay-style cursor pagination
 
 description:
-  Will provide the RelayPage servant combinator with server, client, link and
-  OpenAPI 3.1 support. This package is a compilable stub; the implementation
-  is delivered by ExecPlan 2.
+  The RelayPage servant combinator: declares the four Relay pagination query
+  parameters (first, after, last, before) on a route, validates them before
+  the handler runs, and hands the handler one already-validated PageRequest.
+  Ships HasServer, HasClient, and HasLink instances plus OpenAPI 3.1
+  documentation support via openapi-hs and servant-openapi-hs.
 
 license:       BSD-3-Clause
 license-file:  LICENSE
@@ -37,7 +39,10 @@ common lang
 library
   import:          lang
   hs-source-dirs:  src
-  exposed-modules: Relay.Pagination.Servant
+  exposed-modules:
+    Relay.Pagination.Servant
+    Relay.Pagination.Servant.OpenApi
+
   build-depends:
     , base              >=4.21   && <5
     , relay-pagination
@@ -48,4 +53,16 @@ test-suite relay-pagination-servant-test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
+  build-depends:  base
+
+executable relay-demo
+  import:         lang
+  hs-source-dirs: demo
+  main-is:        Main.hs
+  build-depends:  base
+
+executable relay-demo-openapi
+  import:         lang
+  hs-source-dirs: demo
+  main-is:        OpenApiMain.hs
   build-depends:  base
