@@ -37,7 +37,7 @@ This section must always reflect the actual current state of the work.
 - [x] M4: `README.md` written (positioning, status caveat, quickstart machine-verified against the example, package map, badges placeholder comment, guide pointers, release-order section, requirements, license) (2026-07-16)
 - [x] M4: Per-package `CHANGELOG.md` files created for all four packages, each with the PVP pointer and an `0.1.0.0 — unreleased` section; `extra-doc-files: CHANGELOG.md` added to all four `.cabal` files (2026-07-16)
 - [x] M5: Haddock pass — `just haddock` (recipe already existed from EP-1) reports 100% for every public module of the four released packages *and* the example. EP-1..4 had already documented nearly everything; the pass needed exactly one library fix (`conformancePassed` in `Relay.Pagination.Conformance.Check`) plus five example-module haddocks. Remaining haddock output is link-ambiguity warnings only, no errors (2026-07-16)
-- [ ] M6: `mori.dhall` written at the repo root; `mori show --full` displays the registered identity; `mori registry search relay-pagination` finds it
+- [x] M6: `mori.dhall` written at the repo root (schema pin `026ae74…` copied from `kafka-effectful`, dependency names re-confirmed via `mori registry search`); `mori validate` clean; registered; `mori show --full` displays the identity with all four packages and doc refs; `mori registry search relay-pagination` finds it from an unrelated directory; `mori registry docs shinzui/relay-pagination` lists all four doc refs (2026-07-16)
 - [ ] M7: `cabal check` clean for all four packages; version bounds on all dependencies; release-order implications documented in README and here
 - [ ] Final: ADR distillation pass into `docs/adr/`; MasterPlan registry row for EP-5 set to Complete; Outcomes & Retrospective written
 
@@ -51,6 +51,7 @@ implementation. Provide concise evidence.
 - While implementing M1 (2026-07-16): `Servant.Client.Generic` (for `genericClient`/`AsClientT`) lives in `servant-client-core`, not `servant-client` — the test suite needs both in `build-depends` (GHC: "It is a member of the hidden package ‘servant-client-core-0.20.3.0’").
 - While implementing M1 (2026-07-16): `openapi-hs` defines no `ToSchema` instance for its own `OpenApi` document type, so mounting `/openapi.json` in the same `NamedRoutes` record that `toOpenApi` derives from does not compile without one. Resolved with a minimal orphan in the example (see Decision Log); the plan's `AppRoutes` sketch silently assumed this instance existed.
 - Noted while starting M5 planning (2026-07-16): the `Justfile` already carries a `haddock` recipe (from EP-1: `cabal haddock all --haddock-hyperlink-source --haddock-quickjump`); M5 only needs the documentation pass, not the recipe.
+- While implementing M6 (2026-07-16): registration is the top-level `mori register`, not the plan's `mori registry register` (that subcommand does not exist in mori v1.0.0.0; `mori registry` is query-only, plus `reregister`). Also, `DocAudience` in the pinned mori-schema has no `Agent` variant (`Module | User | API | Internal | Other Text`), so the agent guide is registered with audience `User` per the plan's fallback.
 
 
 ## Decision Log
