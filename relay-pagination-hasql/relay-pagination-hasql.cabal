@@ -61,6 +61,10 @@ test-suite relay-pagination-hasql-tests
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
+  other-modules:
+    Test.Codec
+    Test.Fingerprint
+
   build-depends:
     , base
     , bytestring

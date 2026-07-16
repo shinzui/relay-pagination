@@ -57,9 +57,9 @@ This section must always reflect the actual current state of the work.
 
 - [x] M1: `relay-pagination-hasql` package skeleton exists (cabal file, stub modules, test-suite stub) and is listed in `cabal.project`; `cabal build relay-pagination-hasql` succeeds (2026-07-16: extended EP-1's stub package — EP-1 had already created the directory, cabal file, and umbrella module; added the four submodule stubs, MultilineStrings, and the full dependency set)
 - [x] M1: `ephemeral-pg` wired as a test-only dependency via a `source-repository-package` pin in `cabal.project`; `cabal build relay-pagination-hasql-tests` resolves it (2026-07-16: pin builds; skeleton test passes)
-- [ ] M2: `Relay.Pagination.Hasql.KeyCodec` with `KeyCodec` and built-ins `int8Key`, `textKey`, `uuidKey`, `timestamptzKey`, `boolKey`
-- [ ] M2: `Relay.Pagination.Hasql.SortSpec` with `SortDirection`, `KeyColumn`, `SortSpec`, `sortSpecFingerprint`
-- [ ] M2: unit tests — codec round-trip properties (including timestamptz microsecond exactness) and fingerprint golden/sensitivity tests pass
+- [x] M2: `Relay.Pagination.Hasql.KeyCodec` with `KeyCodec` and built-ins `int8Key`, `textKey`, `uuidKey`, `timestamptzKey`, `boolKey` (2026-07-16; also exports `utcTimeToMicros`/`microsToUtcTime` from the submodule — not the umbrella — so tests and consumers can reuse the exact conversions)
+- [x] M2: `Relay.Pagination.Hasql.SortSpec` with `SortDirection`, `KeyColumn`, `SortSpec`, `sortSpecFingerprint` (2026-07-16; plus `fingerprintBytes` exposing the serialization, per this plan's M2 text)
+- [x] M2: unit tests — codec round-trip properties (including timestamptz microsecond exactness) and fingerprint golden/sensitivity tests pass (2026-07-16: all four plan-pinned golden values — 3101933007, 2542715508, 3017546679, 3884902590 — verified independently in Python before implementation and green in the suite)
 - [ ] M3: `Relay.Pagination.Hasql.Sql` generating the wrapped query snippet (`paginateSnippet`), cursor decoding against the spec
 - [ ] M3: golden SQL tests for the members-like two-column mixed-direction spec, all four {Forward, Backward} × {cursor, no cursor} cases, plus a single-column spec case
 - [ ] M4: `Relay.Pagination.Hasql.Connection` with `mintCursor` and `mkConnection`; `Relay.Pagination.Hasql.paginate` composing everything into a `Statement`

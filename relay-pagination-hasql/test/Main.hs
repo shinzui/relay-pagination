@@ -1,11 +1,12 @@
 module Main (main) where
 
+import Test.Codec qualified
+import Test.Fingerprint qualified
 import Test.Tasty
-import Test.Tasty.HUnit
 
 main :: IO ()
 main =
   defaultMain $
     testGroup
       "relay-pagination-hasql"
-      [testCase "skeleton" (pure ())]
+      [Test.Codec.tests, Test.Fingerprint.tests]
