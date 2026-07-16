@@ -2,7 +2,7 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
-## 0.1.0.0 — unreleased
+## 0.1.0.0 — 2026-07-16
 
 Initial contents:
 

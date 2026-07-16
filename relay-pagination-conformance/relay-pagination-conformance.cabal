@@ -45,13 +45,13 @@ library
     Relay.Pagination.Conformance.Walk
 
   build-depends:
-    , base              >=4.21 && <5
-    , bytestring        >=0.11 && <0.13
-    , containers        >=0.7  && <0.9
-    , relay-pagination  >=0.1  && <0.2
-    , tasty             >=1.4  && <1.6
-    , tasty-hunit       >=0.10 && <0.11
-    , text              >=2.0  && <2.2
+    , base              >=4.21     && <5
+    , bytestring        >=0.11     && <0.13
+    , containers        >=0.7      && <0.9
+    , relay-pagination  ^>=0.1.0.0
+    , tasty             >=1.4      && <1.6
+    , tasty-hunit       >=0.10     && <0.11
+    , text              >=2.0      && <2.2
 
 test-suite relay-pagination-conformance-test
   import:             lang
@@ -76,28 +76,28 @@ test-suite relay-pagination-conformance-test
     WalkSpec
 
   build-depends:
-    , aeson                         >=2.2    && <2.3
+    , aeson                         >=2.2      && <2.3
     , base
     , bytestring
     , containers
     , ephemeral-pg
-    , hasql                         >=1.10   && <1.11
-    , hasql-dynamic-statements      >=0.5    && <0.6
-    , http-client                   >=0.7    && <0.8
-    , quickcheck-instances          >=0.3    && <0.4
-    , relay-pagination              >=0.1    && <0.2
+    , hasql                         >=1.10     && <1.11
+    , hasql-dynamic-statements      >=0.5      && <0.6
+    , http-client                   >=0.7      && <0.8
+    , quickcheck-instances          >=0.3      && <0.4
+    , relay-pagination              ^>=0.1.0.0
     , relay-pagination-conformance
-    , relay-pagination-hasql
-    , relay-pagination-servant
-    , servant                       >=0.20.3 && <0.21
-    , servant-client                >=0.20.3 && <0.21
+    , relay-pagination-hasql        ^>=0.1.0.0
+    , relay-pagination-servant      ^>=0.1.0.0
+    , servant                       >=0.20.3   && <0.21
+    , servant-client                >=0.20.3   && <0.21
     , servant-client-core
     , servant-server
-    , sop-core                      >=0.5    && <0.6
-    , tasty                         >=1.4    && <1.6
-    , tasty-hunit                   >=0.10   && <0.11
-    , tasty-quickcheck              >=0.10   && <0.12
+    , sop-core                      >=0.5      && <0.6
+    , tasty                         >=1.4      && <1.6
+    , tasty-hunit                   >=0.10     && <0.11
+    , tasty-quickcheck              >=0.10     && <0.12
     , text
-    , time                          >=1.12   && <1.15
-    , uuid-types                    >=1.0    && <1.1
-    , warp                          >=3.3    && <3.5
+    , time                          >=1.12     && <1.15
+    , uuid-types                    >=1.0      && <1.1
+    , warp                          >=3.3      && <3.5
