@@ -45,8 +45,8 @@ evidence of teeth.
 ## Progress
 
 - [x] M1: `relay-pagination-conformance` package scaffolded (cabal file, module skeletons, empty test suite); it was already in `cabal.project` from EP-1, and the ephemeral-pg pin was already present from EP-3. `cabal build relay-pagination-conformance` and `cabal test relay-pagination-conformance` succeed ("All 0 tests passed"). Per-stanza dependencies are added with the milestone that first imports them, matching EP-2's `-Wunused-packages` practice. (2026-07-16)
-- [ ] M2: In-memory reference paginator (test-only oracle) implemented and unit-tested.
-- [ ] M2: `walkForward` / `walkBackward` with cursor-loop detection and page cap; unit tests against the oracle, including a looping fake that must abort with `WalkCursorLoop`.
+- [x] M2: In-memory reference paginator (test-only oracle, `test/Oracle.hs`) implemented and unit-tested through the walker cases. (2026-07-16)
+- [x] M2: `walkForward` / `walkBackward` with cursor-loop detection, page cap, and missing-cursor detection; `FetchPage` moved from the facade into `Walk` (facade re-exports it). 12 unit tests green: oracle walks over 0/1/7/10 rows in both directions, page/flag/request evidence, `WalkCursorLoop` on page 2 for a constant-cursor fake, `WalkPageLimitExceeded 5` for a fresh-cursor diverging fake, `WalkMissingCursor 0` for a continuation without a cursor. (2026-07-16)
 - [ ] M3: `ConformanceConfig`, `ConformanceViolation`, `ConformanceReport`, `checkConformance` implementing all six invariants; `renderConformanceReport` produces readable text.
 - [ ] M3: Tasty adapter `Relay.Pagination.Conformance.Tasty.testConformance`.
 - [ ] M3: Teeth tests — three deliberately broken paginators (`length == pageSize` hasNextPage bug, float-lossy cursor, reversed backward edges) each fail the suite; failing-report transcript captured into this plan.
@@ -59,7 +59,7 @@ evidence of teeth.
 
 ## Surprises & Discoveries
 
-(None yet.)
+- While implementing M2 (2026-07-16): with `DuplicateRecordFields`, an unqualified `cursor req` selector is ambiguous (`Edge.cursor` vs `PageRequest.cursor` are both in scope from `Relay.Pagination`) — GHC 9.12 no longer type-directs selector disambiguation. Pattern-match the `PageRequest` fields instead (`PageRequest {cursor = mCursor}`); the same applies anywhere both record types are imported.
 
 
 ## Decision Log

@@ -45,6 +45,8 @@ library
 
   build-depends:
     , base              >=4.21 && <5
+    , bytestring        >=0.11 && <0.13
+    , containers        >=0.7  && <0.9
     , relay-pagination
 
 test-suite relay-pagination-conformance-test
@@ -52,6 +54,14 @@ test-suite relay-pagination-conformance-test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
+  other-modules:
+    Oracle
+    WalkSpec
+
   build-depends:
     , base
-    , tasty  >=1.4 && <1.6
+    , bytestring
+    , relay-pagination
+    , relay-pagination-conformance
+    , tasty                         >=1.4  && <1.6
+    , tasty-hunit                   >=0.10 && <0.11

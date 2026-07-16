@@ -1,12 +1,10 @@
--- | Stub for EP-4 (the conformance walker). The FetchPage callback type is
--- the one deliberate seed: EP-4's walker must stay decoupled from any session
--- runner or HTTP client, taking pages through this function type.
+-- | Conformance suite for Relay-style paginated endpoints: walk an endpoint
+-- through a plain 'FetchPage' callback and check that it can never skip or
+-- duplicate a record. This facade re-exports the whole public API; the
+-- submodules exist for focused imports.
 module Relay.Pagination.Conformance
-  ( FetchPage,
+  ( module Relay.Pagination.Conformance.Walk,
   )
 where
 
-import Relay.Pagination (Connection, PageRequest)
-
--- | How the conformance walker fetches a page from the system under test.
-type FetchPage row = PageRequest -> IO (Connection row)
+import Relay.Pagination.Conformance.Walk
