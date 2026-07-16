@@ -1,4 +1,6 @@
 module Main (main) where
 
+import Test.Tasty
+
 main :: IO ()
-main = putStrLn "no tests yet: implemented by a later ExecPlan"
+main = defaultMain (testGroup "relay-pagination-conformance" [])

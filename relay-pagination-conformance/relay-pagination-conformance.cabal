@@ -1,15 +1,13 @@
 cabal-version: 3.0
 name:          relay-pagination-conformance
 version:       0.1.0.0
-synopsis:
-  Conformance walker proving no-skip/no-duplicate pagination (stub until EP-4)
-
+synopsis:      Conformance suite proving no-skip/no-duplicate pagination
 description:
-  Will provide the conformance walker that services run against their own
-  paginated endpoints to prove no-skip/no-duplicate behavior. It fetches
-  pages through a plain callback, so it stays decoupled from any session
-  runner or HTTP client. This package is a compilable stub; the
-  implementation is delivered by ExecPlan 4.
+  A conformance suite that services run against their own paginated
+  endpoints to prove no-skip/no-duplicate behavior: a page walker with
+  cursor-loop detection and an invariant checker producing human-readable
+  reports. Pages are fetched through a plain callback, so the suite stays
+  decoupled from any session runner or HTTP client.
 
 license:       BSD-3-Clause
 license-file:  LICENSE
@@ -39,7 +37,12 @@ common lang
 library
   import:          lang
   hs-source-dirs:  src
-  exposed-modules: Relay.Pagination.Conformance
+  exposed-modules:
+    Relay.Pagination.Conformance
+    Relay.Pagination.Conformance.Check
+    Relay.Pagination.Conformance.Tasty
+    Relay.Pagination.Conformance.Walk
+
   build-depends:
     , base              >=4.21 && <5
     , relay-pagination
@@ -49,4 +52,6 @@ test-suite relay-pagination-conformance-test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
-  build-depends:  base
+  build-depends:
+    , base
+    , tasty  >=1.4 && <1.6

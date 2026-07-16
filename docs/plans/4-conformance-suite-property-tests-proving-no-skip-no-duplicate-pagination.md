@@ -44,7 +44,7 @@ evidence of teeth.
 
 ## Progress
 
-- [ ] M1: `relay-pagination-conformance` package scaffolded (cabal file, module skeletons, empty test suite), added to `cabal.project`; `cabal build relay-pagination-conformance` and `cabal test relay-pagination-conformance` succeed.
+- [x] M1: `relay-pagination-conformance` package scaffolded (cabal file, module skeletons, empty test suite); it was already in `cabal.project` from EP-1, and the ephemeral-pg pin was already present from EP-3. `cabal build relay-pagination-conformance` and `cabal test relay-pagination-conformance` succeed ("All 0 tests passed"). Per-stanza dependencies are added with the milestone that first imports them, matching EP-2's `-Wunused-packages` practice. (2026-07-16)
 - [ ] M2: In-memory reference paginator (test-only oracle) implemented and unit-tested.
 - [ ] M2: `walkForward` / `walkBackward` with cursor-loop detection and page cap; unit tests against the oracle, including a looping fake that must abort with `WalkCursorLoop`.
 - [ ] M3: `ConformanceConfig`, `ConformanceViolation`, `ConformanceReport`, `checkConformance` implementing all six invariants; `renderConformanceReport` produces readable text.
