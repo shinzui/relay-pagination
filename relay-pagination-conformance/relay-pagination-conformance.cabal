@@ -66,12 +66,14 @@ test-suite relay-pagination-conformance-test
     DbFixture
     DbSpec
     Generators
+    MutationSpec
     Oracle
     WalkSpec
 
   build-depends:
     , base
     , bytestring
+    , containers
     , ephemeral-pg
     , hasql                         >=1.10 && <1.11
     , hasql-dynamic-statements      >=0.5  && <0.6

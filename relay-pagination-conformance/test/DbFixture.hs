@@ -15,6 +15,7 @@ module DbFixture
     insertRows,
     fetchViaEngine,
     testSortSpec,
+    testRowDecoder,
     run,
   )
 where

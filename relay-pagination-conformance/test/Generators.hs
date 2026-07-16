@@ -11,6 +11,7 @@ module Generators
     genAdjacentMicros,
     genExactBoundaries,
     genExtremeSizes,
+    genMutationCase,
   )
 where
 
@@ -69,6 +70,22 @@ genExtremeSizes = do
   stamps <- vectorOf 3 genStampMicros
   rows <- vectorOf rowCount (genRowAmong stamps)
   pure (size, rows)
+
+-- | For the mutation-under-walk properties: @(pageSize, initial, extras)@.
+-- The initial dataset spans at least @3·pageSize + 1@ rows (four or more
+-- pages, so mutating before page 2 happens mid-walk), with ties included.
+-- The extras are row templates whose ids/payloads are used for mid-walk
+-- inserts; their timestamps are overwritten at mutation time relative to
+-- the observed cursor boundary.
+genMutationCase :: Gen (Int, [TestRow], [TestRow])
+genMutationCase = do
+  size <- chooseInt (2, 6)
+  stamps <- vectorOf 3 genStampMicros
+  rowCount <- chooseInt (3 * size + 1, 6 * size)
+  initial <- vectorOf rowCount (genRowAmong stamps)
+  extraCount <- chooseInt (1, size)
+  extras <- vectorOf extraCount (genRowAmong stamps)
+  pure (size, initial, extras)
 
 -- | 2023-11..2027-01 in whole microseconds.
 genStampMicros :: Gen Int64

@@ -52,7 +52,7 @@ evidence of teeth.
 - [x] M3: Teeth tests — three deliberately broken paginators (`length == pageSize` hasNextPage bug, float-lossy cursor, reversed backward edges) each fail the suite with the expected invariant names; real failing-report transcript captured into Validation. The lossy-cursor model uses `Float` rather than `Double` (see Decision Log). All 19 tests green. (2026-07-16)
 - [x] M4: ephemeral-pg fixture (`withResource`-based shared server + connection, `test/DbFixture.hs`) with the `conformance_rows` schema, `unnest`-based multi-row insert, and EP-3 `paginate` wired as `fetchViaEngine`. (2026-07-16)
 - [x] M4: Adversarial QuickCheck generators (heavy ties, adjacent microseconds, exact page-size multiples 0/1/n/n+1/2n/2n+1, page sizes 1 and 100) all green against the EP-3 engine — 4 properties × 20 cases in ~1 s. Spot check performed: dropping the first expected row made the property fail with a Completeness violation naming that row's UUID (plus the corresponding EdgeOrderInvariance hits), then reverted. (2026-07-16)
-- [ ] M5: Mutation-under-walk properties (insert-behind, insert-ahead, delete-visited) green against the EP-3 engine; OFFSET-paginator counterexample demonstrably fails the same property; transcript captured.
+- [x] M5: Mutation-under-walk properties (insert-behind, insert-ahead, delete-visited) green against the EP-3 engine (15 cases each); OFFSET-paginator counterexample demonstrably fails the insert-behind schedule (row displaced into a second visit, inserted row leaking into the walk); real transcript captured into Validation. (2026-07-16)
 - [ ] M6 (soft dep EP-2 — defer, do not block, if EP-2 is not Complete): HTTP-level conformance walk through a warp server exposing a `RelayPage` endpoint, `fetchPage` wired via servant-client.
 - [ ] Final: MasterPlan registry row for EP-4 set to Complete; ADR distillation pass done; Outcomes & Retrospective written.
 
@@ -837,13 +837,18 @@ brokenBoundary fails BoundaryHonesty (report below):                OK
   FAIL BoundaryHonesty (page 2): final non-empty page reports hasNextPage = True; a phantom page was fetched and came back empty
 ```
 
-OFFSET paginator failing the insert-behind mutation property (M5):
+OFFSET paginator failing the insert-behind mutation property (M5; real output
+captured 2026-07-16 — note the concrete failure mode is *duplication*: inserting
+behind the cursor shifts later rows to higher offsets, so the next OFFSET lands
+on already-visited rows; a delete behind the cursor would produce the skip
+variant):
 
 ```text
-db.mutation.insert-behind (offset paginator must fail): OK
+OFFSET paginator violates insert-behind (detected, report below):                                       OK
   detected expected violation:
-    row 6f1c...-... existed at walk start and walk end but was never visited
-    (skipped when 2 rows were inserted before the cursor position at page 2)
+    rows visited twice (pre-existing rows displaced by the insert): [00000000-0000-0000-0000-000000000006]
+    rows never visited: []
+    mid-walk inserted rows that leaked into the walk: [00000000-0000-0000-0000-000100000064]
 ```
 
 Beyond the transcripts, spot-check behaviorally: (a) delete one element from `expected` in
