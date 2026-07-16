@@ -28,9 +28,9 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `examples/members-server` package created with both executables and its conformance test, listed in `cabal.project`; `cabal build all` and `cabal test members-server:test:members-server-test` pass
-- [ ] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves the same OpenAPI 3.1 value that `members-openapi` writes deterministically to `docs/api/openapi.json`
-- [ ] M1: Curl transcript captured from a real run and pasted into this plan and into the developer guide (replacing the illustrative one below)
+- [x] M1: `examples/members-server` package created with both executables and its conformance test, listed in `cabal.project`; `cabal build members-server` and `cabal test members-server-test` pass (4/4 cases: conformance walks at page sizes 3 and 4, typed 400s for mixed directions and foreign-fingerprint cursors) (2026-07-16)
+- [x] M1: Example boots against ephemeral-pg via `just example`; seeded data pages correctly via curl; `/openapi.json` serves the same OpenAPI 3.1 value (`"openapi": "3.1.0"`, paths `/members` + `/openapi.json`, operation ids `listMembers`/`getOpenApi`) that `members-openapi` writes to `docs/api/openapi.json` — proven byte-identical across two consecutive generations (2026-07-16)
+- [x] M1: Curl transcript captured from a real run and pasted into this plan (Validation section) — developer-guide copy lands with M2 (2026-07-16)
 - [ ] M2: `docs/guides/implementing-pagination.md` written, all code blocks compile-checked against the example server
 - [ ] M3: `docs/guides/agent-guide.md` written
 - [ ] M3: `agents/skills/add-paginated-endpoint/SKILL.md` written with frontmatter and templates; verified self-contained (no references to files outside the skill directory except package docs)
@@ -47,7 +47,10 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- While implementing M1 (2026-07-16): `cabal run members-server` fails with `Error: [Cabal-7070]` — because the package and its executable share the name `members-server`, cabal resolves the target to the *package*, which has three components. The Justfile recipe (and any docs) must use the fully qualified `cabal run members-server:exe:members-server`. `cabal run members-openapi` is unambiguous and works bare.
+- While implementing M1 (2026-07-16): `Servant.Client.Generic` (for `genericClient`/`AsClientT`) lives in `servant-client-core`, not `servant-client` — the test suite needs both in `build-depends` (GHC: "It is a member of the hidden package ‘servant-client-core-0.20.3.0’").
+- While implementing M1 (2026-07-16): `openapi-hs` defines no `ToSchema` instance for its own `OpenApi` document type, so mounting `/openapi.json` in the same `NamedRoutes` record that `toOpenApi` derives from does not compile without one. Resolved with a minimal orphan in the example (see Decision Log); the plan's `AppRoutes` sketch silently assumed this instance existed.
+- Noted while starting M5 planning (2026-07-16): the `Justfile` already carries a `haddock` recipe (from EP-1: `cabal haddock all --haddock-hyperlink-source --haddock-quickjump`); M5 only needs the documentation pass, not the recipe.
 
 
 ## Decision Log
@@ -81,6 +84,22 @@ Record every decision made while working on the plan.
 - Decision: Release order is core → hasql → conformance → servant, with servant explicitly blocked until `openapi-hs`/`servant-openapi-hs` are on Hackage; this is documented in the README's release-status section, not hidden in a comment.
   Rationale: `relay-pagination-servant`'s *library* component depends on the git-pinned `openapi-hs` packages, so Hackage cannot resolve it. `relay-pagination-conformance`'s library depends only on the core package and a `fetchPage` callback; its `ephemeral-pg` dependency is confined to test components, which Hackage does not require to be resolvable for the library to be installable — so it can ship early. Stating this in the README prevents a well-meaning contributor from attempting an upload that must fail.
   Date: 2026-07-15
+
+- Decision: The example defines a minimal orphan `ToSchema OpenApi` instance in `Example.OpenApi` (under module-local `-Wno-orphans`), describing the document as a free-form object named `OpenApiDocument`.
+  Rationale: `openapi-hs` has no schema for its own document type, and the plan requires `/openapi.json` to live in the same `NamedRoutes` record that both `serve` and `toOpenApi` consume — deriving the document therefore needs the instance. Confined to the unreleased example package; the released packages' orphan policy (ADR 4: only `Relay.Pagination.Servant.OpenApi`) is untouched.
+  Date: 2026-07-16
+
+- Decision: The example library gained two modules beyond the plan's five-module sketch: `Example.Members.Seed` (schema DDL, the ten-row fixture, and the unnest-based insert — shared verbatim by the server executable and the conformance test) and `Example.Db` (a three-line session runner used by Seed and Handler alike).
+  Rationale: The seed data must be a single source of truth or the test would silently drift from the transcript; the session runner would otherwise be duplicated in two modules. Both stay domain-first (`Seed` is members-specific; `Db` is infrastructure the plan's "thin entry points" rule pushes out of `app/Main.hs`).
+  Date: 2026-07-16
+
+- Decision: `renderMembersOpenApi` (aeson-pretty, sorted keys, trailing newline) lives in the example *library* (`Example.OpenApi`), putting `aeson-pretty` in the library's build-depends rather than the generator executable's.
+  Rationale: The plan's own rule — "if a shared source module imports one of those packages, move the dependency to the library" — applies: the render function sits beside the document it renders, mirroring EP-2's `ToyOpenApi` layout.
+  Date: 2026-07-16
+
+- Decision: Seed UUIDs are `UUID.fromWords 0 0 0 k` with `k` assigned newest-first (Member 10 → `…0001`, Member 01 → `…000a`), so the tied pair (Members 08/07 → `…0003`/`…0004`) breaks in the same newest-first reading order as the rest of the transcript.
+  Rationale: Deterministic, self-evidently synthetic ids that keep the transcript legible; had the tie broken "against" the name order, every transcript reader would stumble over it.
+  Date: 2026-07-16
 
 - Decision: The example and every guide/template apply `docs/adr/1-haskell-language-and-api-conventions.md`: GHC 9.12.4+/GHC2024, shared Cabal baseline, postpositive qualified imports, strict unprefixed records with explicit deriving, `MultilineStrings` for embedded SQL, domain-first modules, `NamedRoutes`, terminal `MultiVerb` with hand-written `AsUnion`, and OpenAPI derived from the served type by a dedicated executable.
   Rationale: EP-5 is the copy surface downstream developers and agents will imitate. Following the implementation convention in library code while publishing a positional/plain-`Get` quickstart would recreate the exact drift the Haskell corpus is meant to prevent. The relevant sources are `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`, `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`, and `mori://shinzui/haskell-jitsurei/docs/api-openapi-from-types`.
@@ -306,7 +325,7 @@ Add to the `Justfile`:
 ```just
 # Boot the example members-server against an ephemeral PostgreSQL database
 example:
-    cabal run members-server
+    cabal run members-server:exe:members-server
 
 # Regenerate the checked-in OpenAPI document from the served API type
 openapi:
@@ -537,7 +556,7 @@ Intention: intention_01kxmc83scexgs8fhg2cfm933h
 
 The plan is accepted when all of the following observable behaviors hold.
 
-**1. The example pages real data with real cursors.** With `just example` running, the following transcript succeeds. The cursor strings below are ILLUSTRATIVE (the real values depend on the EP-3 fingerprint); a Progress item requires capturing the genuine transcript from a live run and replacing these before completion. The *shape* — three edges, base64url cursors, the second request using the first response's `endCursor`, correct `pageInfo` flags — is the contract. The seeded rows are ten members with fixed timestamps, newest first, including two rows sharing one `created_at` (broken deterministically by ascending id):
+**1. The example pages real data with real cursors.** With `just example` running, the following transcript succeeds. It was CAPTURED FROM A LIVE RUN on 2026-07-16 (every value below is genuine; the cursors decode against the members sort-spec fingerprint `1485518795`). The seeded rows are ten members with fixed timestamps, newest first; Members 08 and 07 share one `created_at`, and the tie straddles the first page boundary — broken deterministically by ascending id:
 
 ```console
 $ curl -s 'http://localhost:8080/members?first=3' | jq '{names: [.edges[].node.name], pageInfo}'
@@ -546,12 +565,12 @@ $ curl -s 'http://localhost:8080/members?first=3' | jq '{names: [.edges[].node.n
   "pageInfo": {
     "hasNextPage": true,
     "hasPreviousPage": false,
-    "startCursor": "eyJ2IjoxLCJmIjozNTUwMjYxNzIzLCJrIjpbMTc4NDUwNTYwMDAwMDAwMCwiMGI4Yy4uLiJdfQ",
-    "endCursor": "eyJ2IjoxLCJmIjozNTUwMjYxNzIzLCJrIjpbMTc4NDMzMjgwMDAwMDAwMCwiMDhhMi4uLiJdfQ"
+    "startCursor": "eyJ2IjoxLCJmIjoxNDg1NTE4Nzk1LCJrIjpbeyJ0IjoidHMiLCJ2IjoxNzgyNDc1ODAwMDAwMDAwfSx7InQiOiJ1IiwidiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSJ9XX0",
+    "endCursor": "eyJ2IjoxLCJmIjoxNDg1NTE4Nzk1LCJrIjpbeyJ0IjoidHMiLCJ2IjoxNzgyNDc1NjgwMDAwMDAwfSx7InQiOiJ1IiwidiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMyJ9XX0"
   }
 }
 
-$ curl -s 'http://localhost:8080/members?first=3&after=eyJ2IjoxLCJmIjozNTUwMjYxNzIzLCJrIjpbMTc4NDMzMjgwMDAwMDAwMCwiMDhhMi4uLiJdfQ' \
+$ curl -s 'http://localhost:8080/members?first=3&after=eyJ2IjoxLCJmIjoxNDg1NTE4Nzk1LCJrIjpbeyJ0IjoidHMiLCJ2IjoxNzgyNDc1NjgwMDAwMDAwfSx7InQiOiJ1IiwidiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMyJ9XX0' \
     | jq '{names: [.edges[].node.name], pageInfo: {hasNextPage: .pageInfo.hasNextPage, hasPreviousPage: .pageInfo.hasPreviousPage}}'
 {
   "names": ["Member 07", "Member 06", "Member 05"],
@@ -559,7 +578,39 @@ $ curl -s 'http://localhost:8080/members?first=3&after=eyJ2IjoxLCJmIjozNTUwMjYxN
 }
 ```
 
-Walking forward in pages of 3 through all ten rows must yield each member exactly once, and the final page (one row) must report `hasNextPage: false`. A backward request (`last=3&before=<a mid-stream cursor>`) must return edges in the same canonical (newest-first) order, not reversed.
+Member 08 closed page 1 and Member 07 — its `created_at` twin — opened page 2: the id tie-breaker carried the walk across the duplicate timestamp without skipping or repeating either row. Walking on in pages of 3 yields Members 04/03/02 and then a final single-row page reporting `hasNextPage: false`:
+
+```console
+$ curl -s "http://localhost:8080/members?first=3&after=${END3}" | jq '{names: [.edges[].node.name], pageInfo}'
+{
+  "names": ["Member 01"],
+  "pageInfo": {
+    "hasNextPage": false,
+    "hasPreviousPage": true,
+    "startCursor": "eyJ2IjoxLCJmIjoxNDg1NTE4Nzk1LCJrIjpbeyJ0IjoidHMiLCJ2IjoxNzgyNDc1MjYwMDAwMDAwfSx7InQiOiJ1IiwidiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwYSJ9XX0",
+    "endCursor": "eyJ2IjoxLCJmIjoxNDg1NTE4Nzk1LCJrIjpbeyJ0IjoidHMiLCJ2IjoxNzgyNDc1MjYwMDAwMDAwfSx7InQiOiJ1IiwidiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwYSJ9XX0"
+  }
+}
+```
+
+A backward request from a mid-stream cursor (page 2's `endCursor`, anchored at Member 05) returns edges in the same canonical newest-first order, not reversed, and mixing the argument families is the documented 400:
+
+```console
+$ curl -s "http://localhost:8080/members?last=3&before=${END2}" \
+    | jq '{names: [.edges[].node.name], pageInfo: {hasNextPage: .pageInfo.hasNextPage, hasPreviousPage: .pageInfo.hasPreviousPage}}'
+{
+  "names": ["Member 08", "Member 07", "Member 06"],
+  "pageInfo": { "hasNextPage": true, "hasPreviousPage": true }
+}
+
+$ curl -s 'http://localhost:8080/members?first=3&last=3' | jq .
+{
+  "code": "mixed_pagination_directions",
+  "message": "cannot combine forward (first/after) and backward (last/before) arguments",
+  "parameter": "last",
+  "retryable": false
+}
+```
 
 **2. OpenAPI 3.1 is served and generated deterministically.**
 
@@ -590,7 +641,7 @@ Every step in this plan is additive and safely repeatable. Re-running `just exam
 
 This plan consumes, and must not modify, the public APIs delivered by the earlier plans (restated in full in Context and Orientation): from `relay-pagination` (module `Relay.Pagination`) the types `Cursor`, `CursorPayload`, `KeyValue`, `PageConfig`, `PageRequest`, `Direction`, `Connection`, `Edge`, `PageInfo` and functions `encodeCursor`, `decodeCursor`, `mkPageRequest`; from `relay-pagination-servant` (module `Relay.Pagination.Servant`) the `RelayPage` combinator with its `HasServer`/`HasClient`/`HasLink` and OpenAPI 3.1 instances; from `relay-pagination-hasql` (module `Relay.Pagination.Hasql`) `SortDirection`, `KeyColumn`, `KeyCodec`, `SortSpec`, the built-in codecs `int8Key`/`textKey`/`uuidKey`/`timestamptzKey`/`boolKey`, and `paginate :: SortSpec row -> PageRequest -> Snippet -> Hasql.Decoders.Row row -> Either CursorError (Hasql.Statement.Statement () (Connection row))`; from `relay-pagination-conformance` (module `Relay.Pagination.Conformance`) `checkConformance` and the `walkForward`/`walkBackward` walks, all driven through a `fetchPage :: PageRequest -> IO (Connection row)` callback. If any actual export deviates from these sketches, the deviation is reconciled *into this plan and the guides* (with a Decision Log entry), never papered over.
 
-New artifacts this plan creates and their interfaces: the unreleased library/executable/test package `examples/members-server` (example library containing the shared `Example.*` modules, executables `members-server` and `members-openapi`, test suite `members-server-test`, port 8080, routes `GET /members` and `GET /openapi.json`, checked artifact `docs/api/openapi.json`), consuming additionally `ephemeral-pg` (modules `EphemeralPg`, `EphemeralPg.Config`; local source `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`, wired via `cabal.project` the same way the test suites already use it), `warp` and `servant-server` for serving, `relay-pagination-conformance` only in the test component, and `openapi-hs`/`servant-openapi-hs` 4.1.0 (modules `Data.OpenApi`, `Servant.OpenApi`; git pin `https://github.com/shinzui/openapi-hs.git` already present in `cabal.project` since EP-1 — this plan adds no new pins). Three `Justfile` recipes: `example` (runs `cabal run members-server`), `openapi` (runs `cabal run members-openapi`), and `haddock` (runs `cabal haddock all`). One `mori.dhall` at the repo root conforming to the `mori-schema` `package.dhall` (same pinned import as the sibling `kafka-effectful`/`ephemeral-pg` files), registered via `mori registry register` and verified via `mori show --full`. Documentation artifacts: `README.md`, four per-package `CHANGELOG.md` files, `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md`. Nothing in this plan adds a dependency to any released package's library component; that invariant is what keeps `cabal check` clean and the release order achievable.
+New artifacts this plan creates and their interfaces: the unreleased library/executable/test package `examples/members-server` (example library containing the shared `Example.*` modules, executables `members-server` and `members-openapi`, test suite `members-server-test`, port 8080, routes `GET /members` and `GET /openapi.json`, checked artifact `docs/api/openapi.json`), consuming additionally `ephemeral-pg` (modules `EphemeralPg`, `EphemeralPg.Config`; local source `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg`, wired via `cabal.project` the same way the test suites already use it), `warp` and `servant-server` for serving, `relay-pagination-conformance` only in the test component, and `openapi-hs`/`servant-openapi-hs` 4.1.0 (modules `Data.OpenApi`, `Servant.OpenApi`; git pin `https://github.com/shinzui/openapi-hs.git` already present in `cabal.project` since EP-1 — this plan adds no new pins). Three `Justfile` recipes: `example` (runs `cabal run members-server:exe:members-server` — the bare target is ambiguous because package and executable share a name), `openapi` (runs `cabal run members-openapi`), and `haddock` (already present since EP-1). One `mori.dhall` at the repo root conforming to the `mori-schema` `package.dhall` (same pinned import as the sibling `kafka-effectful`/`ephemeral-pg` files), registered via `mori registry register` and verified via `mori show --full`. Documentation artifacts: `README.md`, four per-package `CHANGELOG.md` files, `docs/guides/implementing-pagination.md`, `docs/guides/agent-guide.md`, and `agents/skills/add-paginated-endpoint/SKILL.md`. Nothing in this plan adds a dependency to any released package's library component; that invariant is what keeps `cabal check` clean and the release order achievable.
 
 ## Revision Notes
 

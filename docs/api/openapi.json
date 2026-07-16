@@ -1,0 +1,241 @@
+{
+    "components": {
+        "schemas": {
+            "Connection_Member": {
+                "properties": {
+                    "edges": {
+                        "items": {
+                            "$ref": "#/components/schemas/Edge_Member"
+                        },
+                        "type": "array"
+                    },
+                    "pageInfo": {
+                        "$ref": "#/components/schemas/PageInfo"
+                    }
+                },
+                "required": [
+                    "edges",
+                    "pageInfo"
+                ],
+                "type": "object"
+            },
+            "Cursor": {
+                "description": "opaque pagination cursor",
+                "format": "base64url",
+                "type": "string"
+            },
+            "Edge_Member": {
+                "properties": {
+                    "cursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    },
+                    "node": {
+                        "$ref": "#/components/schemas/Member"
+                    }
+                },
+                "required": [
+                    "node",
+                    "cursor"
+                ],
+                "type": "object"
+            },
+            "Member": {
+                "properties": {
+                    "createdAt": {
+                        "$ref": "#/components/schemas/UTCTime"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "$ref": "#/components/schemas/UUID"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "createdAt"
+                ],
+                "type": "object"
+            },
+            "OpenApiDocument": {
+                "description": "An OpenAPI 3.1 document.",
+                "type": "object"
+            },
+            "PageInfo": {
+                "properties": {
+                    "endCursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    },
+                    "hasNextPage": {
+                        "type": "boolean"
+                    },
+                    "hasPreviousPage": {
+                        "type": "boolean"
+                    },
+                    "startCursor": {
+                        "$ref": "#/components/schemas/Cursor"
+                    }
+                },
+                "required": [
+                    "hasNextPage",
+                    "hasPreviousPage"
+                ],
+                "type": "object"
+            },
+            "RelayPageError": {
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "parameter": {
+                        "type": "string"
+                    },
+                    "retryable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message",
+                    "retryable"
+                ],
+                "type": "object"
+            },
+            "UTCTime": {
+                "example": "2016-07-22T00:00:00Z",
+                "format": "yyyy-mm-ddThh:MM:ssZ",
+                "type": "string"
+            },
+            "UUID": {
+                "example": "00000000-0000-0000-0000-000000000000",
+                "format": "uuid",
+                "type": "string"
+            }
+        }
+    },
+    "info": {
+        "description": "Example Relay-style cursor-paginated members API from the relay-pagination package family.",
+        "title": "members-server",
+        "version": "0.1.0.0"
+    },
+    "openapi": "3.1.0",
+    "paths": {
+        "/members": {
+            "get": {
+                "operationId": "listMembers",
+                "parameters": [
+                    {
+                        "description": "Forward page size (0..50). Defaults to 3 when neither 'first' nor 'last' is given. Cannot be combined with 'last' or 'before'.",
+                        "in": "query",
+                        "name": "first",
+                        "required": false,
+                        "schema": {
+                            "default": 3,
+                            "maximum": 50,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Opaque cursor: return items after this position (forward pagination).",
+                        "in": "query",
+                        "name": "after",
+                        "required": false,
+                        "schema": {
+                            "format": "base64url",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Backward page size (0..50). Cannot be combined with 'first' or 'after'.",
+                        "in": "query",
+                        "name": "last",
+                        "required": false,
+                        "schema": {
+                            "maximum": 50,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Opaque cursor: return items before this position (backward pagination).",
+                        "in": "query",
+                        "name": "before",
+                        "required": false,
+                        "schema": {
+                            "format": "base64url",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Connection_Member"
+                                }
+                            },
+                            "application/json;charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Connection_Member"
+                                }
+                            }
+                        },
+                        "description": "Page of members"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RelayPageError"
+                                }
+                            },
+                            "application/json;charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RelayPageError"
+                                }
+                            }
+                        },
+                        "description": "Invalid pagination"
+                    }
+                }
+            }
+        },
+        "/openapi.json": {
+            "get": {
+                "operationId": "getOpenApi",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OpenApiDocument"
+                                }
+                            },
+                            "application/json;charset=utf-8": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OpenApiDocument"
+                                }
+                            }
+                        },
+                        "description": "OpenAPI 3.1 document"
+                    }
+                }
+            }
+        }
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080"
+        }
+    ]
+}

@@ -13,6 +13,14 @@ test:
 fmt:
   nix fmt
 
+# Boot the example members-server against an ephemeral PostgreSQL database
+example:
+  cabal run members-server:exe:members-server
+
+# Regenerate the checked-in OpenAPI document from the served API type
+openapi:
+  cabal run members-openapi
+
 # Generate haddock documentation
 haddock:
   cabal haddock all --haddock-hyperlink-source --haddock-quickjump

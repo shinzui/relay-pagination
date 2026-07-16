@@ -1,0 +1,116 @@
+cabal-version: 3.0
+name:          members-server
+version:       0.1.0.0
+synopsis:      Example members-server for relay-pagination
+description:
+  A runnable example service exercising all four relay-pagination packages
+  together: a members table paginated through the RelayPage combinator and
+  the hasql keyset engine, served by warp against an ephemeral PostgreSQL
+  database, with a deterministic OpenAPI 3.1 artifact generator and a
+  conformance test. This package is never released; it exists so the guides
+  quote code that CI compiles on every change.
+
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Nadeem Bitar
+maintainer:    Nadeem Bitar
+category:      Example
+build-type:    Simple
+
+common warnings
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wunused-packages
+
+common lang
+  import:             warnings
+  default-language:   GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    MultilineStrings
+    OverloadedLabels
+    OverloadedStrings
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules:
+    Example.Db
+    Example.Members.Api
+    Example.Members.Domain
+    Example.Members.Handler
+    Example.Members.Query
+    Example.Members.Seed
+    Example.OpenApi
+
+  build-depends:
+    , aeson
+    , aeson-pretty
+    , base                       >=4.21
+    , bytestring
+    , hasql                      >=1.10
+    , hasql-dynamic-statements
+    , insert-ordered-containers
+    , lens
+    , openapi-hs
+    , relay-pagination
+    , relay-pagination-hasql
+    , relay-pagination-servant
+    , servant                    >=0.20.3
+    , servant-openapi-hs
+    , servant-server
+    , sop-core
+    , text
+    , time
+    , uuid
+    , wai
+
+executable members-server
+  import:         lang
+  hs-source-dirs: app
+  main-is:        Main.hs
+
+  -- warp requires the threaded RTS (its TimerManager will not start without it)
+  ghc-options:    -threaded
+  build-depends:
+    , base
+    , ephemeral-pg
+    , hasql
+    , members-server
+    , text
+    , warp
+
+executable members-openapi
+  import:         lang
+  hs-source-dirs: app
+  main-is:        OpenApiMain.hs
+  build-depends:
+    , base
+    , bytestring
+    , directory
+    , members-server
+
+test-suite members-server-test
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is:        Main.hs
+
+  -- warp requires the threaded RTS (its TimerManager will not start without it)
+  ghc-options:    -threaded
+  build-depends:
+    , base
+    , ephemeral-pg
+    , hasql
+    , http-client
+    , members-server
+    , relay-pagination
+    , relay-pagination-conformance
+    , relay-pagination-servant
+    , servant-client
+    , servant-client-core
+    , tasty
+    , tasty-hunit
+    , text
+    , warp

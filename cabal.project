@@ -3,6 +3,7 @@ packages:
   relay-pagination-servant
   relay-pagination-hasql
   relay-pagination-conformance
+  examples/members-server
 
 tests: True
 
