@@ -4,7 +4,11 @@
 -- submodules exist for focused imports.
 module Relay.Pagination.Conformance
   ( module Relay.Pagination.Conformance.Walk,
+    module Relay.Pagination.Conformance.Check,
+    module Relay.Pagination.Conformance.Tasty,
   )
 where
 
+import Relay.Pagination.Conformance.Check
+import Relay.Pagination.Conformance.Tasty
 import Relay.Pagination.Conformance.Walk

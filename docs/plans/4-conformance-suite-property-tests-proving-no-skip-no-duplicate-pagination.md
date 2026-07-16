@@ -47,9 +47,9 @@ evidence of teeth.
 - [x] M1: `relay-pagination-conformance` package scaffolded (cabal file, module skeletons, empty test suite); it was already in `cabal.project` from EP-1, and the ephemeral-pg pin was already present from EP-3. `cabal build relay-pagination-conformance` and `cabal test relay-pagination-conformance` succeed ("All 0 tests passed"). Per-stanza dependencies are added with the milestone that first imports them, matching EP-2's `-Wunused-packages` practice. (2026-07-16)
 - [x] M2: In-memory reference paginator (test-only oracle, `test/Oracle.hs`) implemented and unit-tested through the walker cases. (2026-07-16)
 - [x] M2: `walkForward` / `walkBackward` with cursor-loop detection, page cap, and missing-cursor detection; `FetchPage` moved from the facade into `Walk` (facade re-exports it). 12 unit tests green: oracle walks over 0/1/7/10 rows in both directions, page/flag/request evidence, `WalkCursorLoop` on page 2 for a constant-cursor fake, `WalkPageLimitExceeded 5` for a fresh-cursor diverging fake, `WalkMissingCursor 0` for a continuation without a cursor. (2026-07-16)
-- [ ] M3: `ConformanceConfig`, `ConformanceViolation`, `ConformanceReport`, `checkConformance` implementing all six invariants; `renderConformanceReport` produces readable text.
-- [ ] M3: Tasty adapter `Relay.Pagination.Conformance.Tasty.testConformance`.
-- [ ] M3: Teeth tests — three deliberately broken paginators (`length == pageSize` hasNextPage bug, float-lossy cursor, reversed backward edges) each fail the suite; failing-report transcript captured into this plan.
+- [x] M3: `ConformanceConfig`, `ConformanceViolation`, `ConformanceReport`, `checkConformance` implementing all six invariants (plus `WalkTerminated` for aborted walks); `renderConformanceReport` produces readable text. (2026-07-16)
+- [x] M3: Tasty adapter `Relay.Pagination.Conformance.Tasty.testConformance`, exercised by an oracle-passing test. (2026-07-16)
+- [x] M3: Teeth tests — three deliberately broken paginators (`length == pageSize` hasNextPage bug, float-lossy cursor, reversed backward edges) each fail the suite with the expected invariant names; real failing-report transcript captured into Validation. The lossy-cursor model uses `Float` rather than `Double` (see Decision Log). All 19 tests green. (2026-07-16)
 - [ ] M4: ephemeral-pg fixture (`withResource`-based shared server) and test schema; EP-3 `paginate` wired as a `fetchPage` callback.
 - [ ] M4: Adversarial QuickCheck generators (heavy ties, adjacent microseconds, exact page-size multiples 0/1/n/n+1/2n/2n+1, page size 1, page size = maxPageSize) all green against the EP-3 engine.
 - [ ] M5: Mutation-under-walk properties (insert-behind, insert-ahead, delete-visited) green against the EP-3 engine; OFFSET-paginator counterexample demonstrably fails the same property; transcript captured.
@@ -59,6 +59,7 @@ evidence of teeth.
 
 ## Surprises & Discoveries
 
+- While implementing M3 (2026-07-16): **a `Double` of epoch seconds round-trips microseconds exactly at 2026 epoch magnitudes.** At ~1.77e9 seconds the ulp is ≈0.24 µs, under the 0.5 µs round-to-nearest threshold, so `round (us/1e6 * 1e6) == us` for every microsecond count — the planned "odd microsecond counts near a large epoch" search found no non-round-tripping stamp in 1000 candidates. `Double`-seconds cursors only start corrupting microseconds beyond epoch ~2^33 seconds (~year 2242); the reference bug's practical risk is text-formatting/truncation variants and the general fragility of the pattern. The teeth test models the same bug class with single-precision `Float` (ulp ≈ 128 s at this magnitude), which skips deterministically.
 - While implementing M2 (2026-07-16): with `DuplicateRecordFields`, an unqualified `cursor req` selector is ambiguous (`Edge.cursor` vs `PageRequest.cursor` are both in scope from `Relay.Pagination`) — GHC 9.12 no longer type-directs selector disambiguation. Pattern-match the `PageRequest` fields instead (`PageRequest {cursor = mCursor}`); the same applies anywhere both record types are imported.
 
 
@@ -95,6 +96,10 @@ evidence of teeth.
 - Decision: Pin `ephemeral-pg` (test-suite dependency only) via a `source-repository-package` on `https://github.com/shinzui/ephemeral-pg.git` at commit `215e4ae5fc844d322e2c715369bf5ec4ff285294`, unless EP-3 has already added the same pin, in which case reuse it unchanged.
   Rationale: The library is not on Hackage. The local checkout lives at `/Users/shinzui/Keikaku/bokuno/ephemeral-pg-project/ephemeral-pg` (the git root; the `.cabal` file is at the repo root), which can be used via an `optional-packages` line during development, but CI needs the git pin.
   Date: 2026-07-15
+
+- Decision: `brokenFloatCursor` models the lossy cursor with single-precision `Float` epoch seconds instead of the plan's `Double`.
+  Rationale: The plan assumed a `Double` round trip could be made to fail near a 2026 epoch; it cannot (see Surprises — ulp is comfortably under the rounding threshold until ~year 2242). `Float` reproduces the identical failure mode (reconstructed boundary lands above the true stamp; the whole tie run is skipped) deterministically, and the test derives its stamp from the observed round-trip skew and asserts the skew exists, so it can never silently test nothing.
+  Date: 2026-07-16
 
 - Decision: Apply `docs/adr/1-haskell-language-and-api-conventions.md` throughout the package and test suite. Use GHC 9.12.4+/GHC2024, the shared Cabal baseline in every component, strict unprefixed records with explicit deriving, postpositive qualified imports, and `MultilineStrings` in database-backed test modules. The HTTP composition test uses a one-field `NamedRoutes` record and a terminal `MultiVerb` result with a hand-written `AsUnion` mapping.
   Rationale: These are the relevant conventions from `mori://shinzui/haskell-jitsurei/docs/core-standards`, `mori://shinzui/haskell-jitsurei/docs/core-multiline-strings`, and `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`. M6 is intended as copyable evidence that the packages compose, so a positional/plain-`Get` toy would teach a route and error model that consuming services should not copy.
@@ -821,14 +826,15 @@ completion (the blocks below show the *expected shape*; replace each with the re
 captured output when M3/M5 land):
 
 Broken-paginator report (M3, `brokenBoundary` — the reference `length == first` bug — on
-9 rows with page size 3):
+9 rows with page size 3; real output captured 2026-07-16 from
+`cabal test relay-pagination-conformance --test-show-details=direct`, where the
+`testCaseInfo` teeth test prints the rendered report):
 
 ```text
-relay-pagination conformance: 2 violation(s) across 4 page(s) walked
-FAIL BoundaryHonesty (page 2): final non-empty page reports hasNextPage = True;
-     a phantom page was fetched and came back empty
-FAIL BoundaryHonesty (page 3): page is empty but the result set is not;
-     empty trailing page indicates a length == pageSize heuristic
+brokenBoundary fails BoundaryHonesty (report below):                OK
+  relay-pagination conformance: 2 violation(s) across 4 page(s) walked
+  FAIL BoundaryHonesty (page 3): page is empty but the result set is not; an empty trailing page indicates a length == pageSize heuristic
+  FAIL BoundaryHonesty (page 2): final non-empty page reports hasNextPage = True; a phantom page was fetched and came back empty
 ```
 
 OFFSET paginator failing the insert-behind mutation property (M5):
