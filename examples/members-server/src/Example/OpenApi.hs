@@ -17,7 +17,7 @@ where
 import Control.Lens ((%~), (&), (.~), (?~), _Just)
 import Data.Aeson.Encode.Pretty (Config (..), defConfig, encodePretty')
 import Data.ByteString.Lazy (ByteString)
-import Data.HashMap.Strict.InsOrd qualified as InsOrd
+import Data.HashMap.Strict.InsOrd.Compat qualified as InsOrd
 import Data.OpenApi (NamedSchema (..), OpenApi, ToSchema (..))
 import Data.OpenApi qualified as OpenApi
 import Data.Text (Text)

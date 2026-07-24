@@ -1,18 +1,18 @@
 # ADR 6: Release packaging — per-package changelogs, version bounds, and release order
 
-Status: Accepted
+Status: Accepted (amended 2026-07-24)
 
 Date: 2026-07-16
 
 ## Context
 
 The repository holds four released packages plus an unreleased example. The
-packages version independently under the PVP and cannot all reach Hackage at
-once: `relay-pagination-servant`'s library depends on `openapi-hs` and
-`servant-openapi-hs` 4.1, which exist only as `source-repository-package` git
-pins in `cabal.project` until they are published. Release mechanics therefore
-need durable, written-down rules or a well-meaning releaser will attempt an
-upload that must fail.
+packages version independently under the PVP. At the time of the original
+decision, `relay-pagination-servant` could not reach Hackage because its
+`openapi-hs` and `servant-openapi-hs` dependencies were available only through
+`source-repository-package` pins. Both dependencies are now published, so the
+temporary pins have been removed and the release rules below reflect the
+unblocked package graph.
 
 ## Decision
 
@@ -35,12 +35,11 @@ unpublished. `cabal check` must stay free of errors *and* warnings for all
 four packages.
 
 **Release order.** (1) `relay-pagination` first — everything depends on it.
-(2) `relay-pagination-hasql` and `relay-pagination-conformance` next, in
-either order. (3) `relay-pagination-servant` only after `openapi-hs` and
-`servant-openapi-hs` are on Hackage; its cabal file already carries the
-`>=4.1 && <4.2` bounds so release day is a version-bump-free upload. This
-order is documented in the README's release-status section, where a releaser
-will actually see it.
+(2) `relay-pagination-hasql`, `relay-pagination-conformance`, and
+`relay-pagination-servant` next, in any order. The servant package uses the
+published `openapi-hs >=5.0 && <5.1` and
+`servant-openapi-hs >=5.1 && <5.2` releases. This order is documented in the
+README's release-status section, where a releaser will actually see it.
 
 ## Consequences
 
@@ -50,6 +49,5 @@ will actually see it.
   by moving `ephemeral-pg` into its library: the boundary is stated here, in
   ADR 5, and enforced by the sdist review step (no `ephemeral-pg` outside
   `test-suite` stanzas).
-- When `openapi-hs`/`servant-openapi-hs` publish, the only release work for
-  the servant package is deleting the two `source-repository-package` pins
-  and uploading.
+- `relay-pagination-servant` is no longer externally blocked: its OpenAPI
+  dependencies resolve entirely from Hackage.

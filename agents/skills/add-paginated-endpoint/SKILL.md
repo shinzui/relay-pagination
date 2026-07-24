@@ -19,7 +19,7 @@ Placeholders: `<Resource>` (payload type, e.g. `Member`), `<resources>` (route s
 ## Preconditions
 
 1. Verify the service depends on `servant-server` and `hasql`. If not, stop and tell the user this skill targets servant + hasql services.
-2. Verify the build plan contains `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, and (test-only) `relay-pagination-conformance`. Add missing ones to `build-depends`. Note: until `openapi-hs`/`servant-openapi-hs` are on Hackage, `relay-pagination-servant` needs their git pins in `cabal.project` (two `source-repository-package` blocks for `https://github.com/shinzui/openapi-hs.git` and `https://github.com/shinzui/servant-openapi-hs.git`). Never add the abandoned `openapi3` package.
+2. Verify the build plan contains `relay-pagination`, `relay-pagination-servant`, `relay-pagination-hasql`, and (test-only) `relay-pagination-conformance`. Add missing ones to `build-depends`. `relay-pagination-servant` resolves its published `openapi-hs` and `servant-openapi-hs` dependencies from Hackage; do not add source-repository pins or the abandoned `openapi3` package.
 3. Read the service's Cabal common stanzas and follow its conventions. The package family requires GHC 9.12.4+/`GHC2024` and `base >=4.21`. If the consuming repo has stricter standards, preserve them — do not clone another repo's extension list blindly.
 4. Read the target table's schema. Confirm the sort columns you will pick are `NOT NULL`.
 

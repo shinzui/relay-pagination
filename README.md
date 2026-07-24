@@ -104,17 +104,16 @@ listMembersHandler conn pageRequest =
 
 ## Release status
 
-Planned release order, constrained by dependencies:
+Planned release order, constrained by internal dependencies:
 
 1. **`relay-pagination`** — releasable now; everything depends on it.
-2. **`relay-pagination-hasql`** and **`relay-pagination-conformance`** — releasable after core, in either order. The conformance package's `ephemeral-pg` dependency is confined to its test suite and does not block release.
-3. **`relay-pagination-servant`** — **blocked** until [`openapi-hs`](https://github.com/shinzui/openapi-hs) and [`servant-openapi-hs`](https://github.com/shinzui/servant-openapi-hs) are published to Hackage: its library component depends on them (currently `source-repository-package` git pins in `cabal.project`), and Hackage refuses uploads whose library dependencies it cannot resolve. The abandoned `openapi3` package is deliberately not used anywhere.
+2. **`relay-pagination-hasql`**, **`relay-pagination-conformance`**, and **`relay-pagination-servant`** — releasable after core, in any order. The conformance package's `ephemeral-pg` dependency is confined to its test suite and does not block release. The servant package uses the published `openapi-hs` and `servant-openapi-hs` packages; the abandoned `openapi3` package is deliberately not used anywhere.
 
 ## Requirements
 
 - GHC 9.12.4 or newer (`default-language: GHC2024`, `base >= 4.21`)
 - hasql 1.10.x, servant 0.20.3
-- OpenAPI support via `openapi-hs`/`servant-openapi-hs` 4.1 (OpenAPI 3.1)
+- OpenAPI support via `openapi-hs` 5.0 / `servant-openapi-hs` 5.1 (OpenAPI 3.1)
 
 ## Development
 

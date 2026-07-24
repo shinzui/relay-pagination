@@ -47,17 +47,16 @@ library
   build-depends:
     , aeson
     , aeson-pretty
-    , base                       >=4.21
+    , base                      >=4.21
     , bytestring
-    , hasql                      >=1.10
+    , hasql                     >=1.10
     , hasql-dynamic-statements
-    , insert-ordered-containers
     , lens
     , openapi-hs
     , relay-pagination
     , relay-pagination-hasql
     , relay-pagination-servant
-    , servant                    >=0.20.3
+    , servant                   >=0.20.3
     , servant-openapi-hs
     , servant-server
     , sop-core

@@ -7,7 +7,7 @@ import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy (ByteString)
 import Data.ByteString.Lazy qualified as LBS
-import Data.HashMap.Strict.InsOrd qualified as InsOrd
+import Data.HashMap.Strict.InsOrd.Compat qualified as InsOrd
 import Data.List (sort)
 import Data.OpenApi qualified as OpenApi
 import Data.Proxy (Proxy (..))

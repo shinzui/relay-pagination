@@ -49,12 +49,12 @@ library
     , base                 >=4.21     && <5
     , http-api-data        >=0.6      && <0.7
     , http-types           >=0.12     && <0.13
-    , lens                 >=5.2      && <5.4
-    , openapi-hs           >=4.1      && <4.2
+    , lens                 >=5.3.3    && <5.4
+    , openapi-hs           >=5.0      && <5.1
     , relay-pagination     ^>=0.1.0.0
     , servant              >=0.20.3   && <0.21
     , servant-client-core  >=0.20.3   && <0.21
-    , servant-openapi-hs   >=4.1      && <4.2
+    , servant-openapi-hs   >=5.1      && <5.2
     , servant-server       >=0.20.3   && <0.21
     , text                 >=2.0      && <2.2
     , wai                  >=3.2      && <3.3
@@ -72,28 +72,27 @@ test-suite relay-pagination-servant-test
   ghc-options:    -threaded
   build-depends:
     , aeson
-    , aeson-pretty               >=0.8      && <0.9
+    , aeson-pretty              >=0.8      && <0.9
     , base
-    , bytestring                 >=0.11     && <0.13
+    , bytestring                >=0.11     && <0.13
     , http-api-data
-    , http-client                >=0.7      && <0.8
+    , http-client               >=0.7      && <0.8
     , http-types
-    , insert-ordered-containers  >=0.2      && <0.3
     , lens
     , openapi-hs
-    , relay-pagination           ^>=0.1.0.0
+    , relay-pagination          ^>=0.1.0.0
     , relay-pagination-servant
     , servant
-    , servant-client             >=0.20.3   && <0.21
+    , servant-client            >=0.20.3   && <0.21
     , servant-client-core
     , servant-openapi-hs
     , servant-server
-    , sop-core                   >=0.5      && <0.6
-    , tasty                      >=1.4      && <1.6
-    , tasty-hunit                >=0.10     && <0.11
+    , sop-core                  >=0.5      && <0.6
+    , tasty                     >=1.4      && <1.6
+    , tasty-hunit               >=0.10     && <0.11
     , text
     , wai
-    , warp                       >=3.3      && <3.5
+    , warp                      >=3.3      && <3.5
 
 executable relay-demo
   import:         lang

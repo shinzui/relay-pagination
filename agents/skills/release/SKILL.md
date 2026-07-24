@@ -35,7 +35,7 @@ dependencies:
    backend (library depends on relay-pagination)
 3. **relay-pagination-servant** (`relay-pagination-servant/`) — Servant
    surface (library depends on relay-pagination, **and on `openapi-hs` /
-   `servant-openapi-hs`** — see the pre-flight gate in step 1)
+   `servant-openapi-hs`**)
 4. **relay-pagination-conformance** (`relay-pagination-conformance/`) —
    conformance suite (library depends only on relay-pagination; its test
    suite depends on relay-pagination-hasql, relay-pagination-servant, and
@@ -54,24 +54,22 @@ The following are **NOT released** to Hackage:
 
 ## Steps
 
-### 1. Pre-flight: external dependency gate
+### 1. Pre-flight: external dependency check
 
-`relay-pagination-servant`'s **library** depends on `openapi-hs >=4.1 && <4.2`
-and `servant-openapi-hs >=4.1 && <4.2`, which are currently consumed as
-`source-repository-package` git pins in `cabal.project`. A Hackage upload of
-relay-pagination-servant is **unbuildable** unless those packages exist on
-Hackage at a version satisfying the bounds.
+`relay-pagination-servant`'s **library** depends on the published
+`openapi-hs >=5.0 && <5.1` and
+`servant-openapi-hs >=5.1 && <5.2` packages.
 
 Check before doing anything else:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" https://hackage.haskell.org/package/openapi-hs
-curl -s -o /dev/null -w "%{http_code}" https://hackage.haskell.org/package/servant-openapi-hs
+curl -fsSL https://hackage.haskell.org/package/openapi-hs/preferred.json
+curl -fsSL https://hackage.haskell.org/package/servant-openapi-hs/preferred.json
 ```
 
-If either returns non-200 (or the available versions don't satisfy the
-bounds), **stop the entire release** and report the blocker to the user
-before committing, tagging, or uploading anything.
+If either request fails or the available versions no longer satisfy the
+bounds, **stop the entire release** and report the blocker to the user before
+committing, tagging, or uploading anything.
 
 Also note: `relay-pagination-conformance`'s **test suite** depends on
 `ephemeral-pg` (a git pin, not on Hackage). This does not block library
@@ -237,10 +235,9 @@ EOF
 
 ## Important
 
-- Always run the pre-flight gate (step 1) first: never upload
-  relay-pagination-servant while `openapi-hs`/`servant-openapi-hs` are absent
-  from Hackage — and since all packages release together under one version,
-  stop the whole release, not just that package.
+- Always run the external dependency check (step 1) first. Since all packages
+  release together under one version, stop the whole release if the published
+  `openapi-hs`/`servant-openapi-hs` versions do not satisfy the bounds.
 - Always ask the user to confirm the version bump, bounds, and changelogs
   before committing.
 - Always publish in dependency order: relay-pagination →
