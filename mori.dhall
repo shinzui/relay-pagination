@@ -1,6 +1,6 @@
 let Schema =
-      https://raw.githubusercontent.com/shinzui/mori-schema/026ae74331e5c516542af1dd96f041c658ed4621/package.dhall
-        sha256:18258ef583580a897f4af3e7c86db0342afb42fb40efc535b217ba1089230141
+      https://raw.githubusercontent.com/shinzui/mori-schema/143b3138e697e211249f094eddaf8248c590a5a0/package.dhall
+        sha256:da11f2da781dca8824039c41ef27177193c060099800221c490d961fd07061c2
 
 in  Schema.Project::{ project =
       Schema.ProjectIdentity::{ name = "relay-pagination"
