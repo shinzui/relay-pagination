@@ -4,6 +4,14 @@ All published packages in this repository share a single version and are
 released together. Per-package details live in each package's own
 `CHANGELOG.md`.
 
+## 0.1.1.0 — 2026-07-24
+
+### Other Changes
+
+- Updated `relay-pagination-servant` for `openapi-hs-5.0` and
+  `servant-openapi-hs-5.1`.
+- Updated repository dependency and release metadata.
+
 ## 0.1.0.0 — 2026-07-16
 
 Initial release of the relay-pagination package family:

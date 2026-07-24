@@ -2,6 +2,13 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.0 — 2026-07-24
+
+### Other Changes
+
+- Updated OpenAPI integration for `openapi-hs-5.0` and
+  `servant-openapi-hs-5.1`, including its test suite.
+
 ## 0.1.0.0 — 2026-07-16
 
 Initial contents:

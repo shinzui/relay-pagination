@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            relay-pagination-hasql
-version:         0.1.0.0
+version:         0.1.1.0
 synopsis:
   Keyset-pagination engine producing Relay connections from hasql queries
 
@@ -52,7 +52,7 @@ library
     , bytestring                >=0.11     && <0.13
     , hasql                     >=1.10     && <1.11
     , hasql-dynamic-statements  >=0.5.1    && <0.6
-    , relay-pagination          ^>=0.1.0.0
+    , relay-pagination          ^>=0.1.1.0
     , text                      >=2.0      && <2.2
     , time                      >=1.12     && <1.15
     , uuid                      >=1.3      && <1.4
@@ -75,7 +75,7 @@ test-suite relay-pagination-hasql-tests
     , ephemeral-pg
     , hasql
     , hasql-dynamic-statements
-    , relay-pagination          ^>=0.1.0.0
+    , relay-pagination          ^>=0.1.1.0
     , relay-pagination-hasql
     , tasty
     , tasty-golden
