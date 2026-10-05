@@ -2,6 +2,13 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.1 — 2026-10-05
+
+### Other Changes
+
+- Align library and integration-test dependencies with the shared 0.1.1.1 release.
+- No changes to the conformance walker or public API.
+
 ## 0.1.1.0 — 2026-07-24
 
 No package-specific changes.

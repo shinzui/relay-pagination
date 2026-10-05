@@ -2,6 +2,13 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.1 — 2026-10-05
+
+### Other Changes
+
+- Admit http-api-data 0.7 while retaining 0.6 support.
+- Align the core dependency bound with the shared 0.1.1.1 release.
+
 ## 0.1.1.0 — 2026-07-24
 
 ### Other Changes

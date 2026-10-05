@@ -4,6 +4,13 @@ All published packages in this repository share a single version and are
 released together. Per-package details live in each package's own
 `CHANGELOG.md`.
 
+## 0.1.1.1 — 2026-10-05
+
+### Other Changes
+
+- Admit http-api-data 0.7 in the core and Servant packages; keep 0.6 support.
+- Align internal dependency bounds with this compatibility release.
+
 ## 0.1.1.0 — 2026-07-24
 
 ### Other Changes

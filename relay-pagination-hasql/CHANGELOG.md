@@ -2,6 +2,13 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.1 — 2026-10-05
+
+### Other Changes
+
+- Align the core dependency bound with the shared 0.1.1.1 compatibility release.
+- No changes to the Hasql engine or public API.
+
 ## 0.1.1.0 — 2026-07-24
 
 No package-specific changes.
