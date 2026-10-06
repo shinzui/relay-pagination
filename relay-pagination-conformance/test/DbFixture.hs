@@ -47,6 +47,7 @@ import Relay.Pagination.Hasql
     timestamptzKey,
     uuidKey,
   )
+import Relay.Pagination.Test.Postgres (ephemeralPgConfig)
 
 data TestRow = TestRow
   { rowId :: !UUID,
@@ -93,9 +94,10 @@ fetchViaEngine conn req =
 -- | One cached-initdb server plus one connection, with the schema created.
 acquireDb :: IO (Pg.Database, HasqlConn.Connection)
 acquireDb = do
+  config <- ephemeralPgConfig
   db <-
     either (fail . Text.unpack . Pg.renderStartError) pure
-      =<< Pg.startCached Pg.defaultConfig Pg.defaultCacheConfig
+      =<< Pg.startCached config Pg.defaultCacheConfig
   conn <- either (fail . show) pure =<< HasqlConn.acquire (Pg.connectionSettings db)
   run conn createSchema
   pure (db, conn)

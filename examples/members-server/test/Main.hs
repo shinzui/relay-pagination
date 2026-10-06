@@ -28,6 +28,7 @@ import Relay.Pagination.Servant
     backwardPage,
     forwardPage,
   )
+import Relay.Pagination.Test.Postgres (ephemeralPgConfig)
 import Servant.Client (ClientEnv, ClientM, mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client.Generic (AsClientT, genericClient)
 import Test.Tasty
@@ -118,9 +119,10 @@ assertErrorCode expected = \case
 
 acquireExample :: IO (Pg.Database, HasqlConn.Connection)
 acquireExample = do
+  config <- ephemeralPgConfig
   db <-
     either (fail . Text.unpack . Pg.renderStartError) pure
-      =<< Pg.startCached Pg.defaultConfig Pg.defaultCacheConfig
+      =<< Pg.startCached config Pg.defaultCacheConfig
   conn <- either (fail . show) pure =<< HasqlConn.acquire (Pg.connectionSettings db)
   createMembersSchema conn
   insertMembers conn seedMembers

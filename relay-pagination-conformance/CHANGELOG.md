@@ -2,6 +2,12 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.2 — 2026-10-06
+
+### Fixed
+
+- Use released ephemeral-pg >=0.3.1 && <0.4 and one stable effective-uid temporary root shared by database fixtures and the example service, preserving startup stale-instance sweeping.
+
 ## 0.1.1.1 — 2026-10-05
 
 ### Other Changes

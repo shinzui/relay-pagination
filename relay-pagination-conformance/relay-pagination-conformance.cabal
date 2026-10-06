@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            relay-pagination-conformance
-version:         0.1.1.1
+version:         0.1.1.2
 synopsis:        Conformance suite proving no-skip/no-duplicate pagination
 description:
   A conformance suite that services run against their own paginated
@@ -48,7 +48,7 @@ library
     , base              >=4.21     && <5
     , bytestring        >=0.11     && <0.13
     , containers        >=0.7      && <0.9
-    , relay-pagination  ^>=0.1.1.1
+    , relay-pagination  ^>=0.1.1.2
     , tasty             >=1.4      && <1.6
     , tasty-hunit       >=0.10     && <0.11
     , text              >=2.0      && <2.2
@@ -56,7 +56,7 @@ library
 test-suite relay-pagination-conformance-test
   import:             lang
   type:               exitcode-stdio-1.0
-  hs-source-dirs:     test
+  hs-source-dirs:     test test-support
   main-is:            Main.hs
 
   -- MultilineStrings: fixture DDL and the multi-row insert (ADR 1)
@@ -73,6 +73,7 @@ test-suite relay-pagination-conformance-test
     HttpSpec
     MutationSpec
     Oracle
+    Relay.Pagination.Test.Postgres
     WalkSpec
 
   build-depends:
@@ -80,15 +81,16 @@ test-suite relay-pagination-conformance-test
     , base
     , bytestring
     , containers
-    , ephemeral-pg
+    , directory
+    , ephemeral-pg                  >=0.3.1    && <0.4
     , hasql                         >=1.10     && <1.11
     , hasql-dynamic-statements      >=0.5      && <0.6
     , http-client                   >=0.7      && <0.8
     , quickcheck-instances          >=0.3      && <0.4
-    , relay-pagination              ^>=0.1.1.1
+    , relay-pagination              ^>=0.1.1.2
     , relay-pagination-conformance
-    , relay-pagination-hasql        ^>=0.1.1.1
-    , relay-pagination-servant      ^>=0.1.1.1
+    , relay-pagination-hasql        ^>=0.1.1.2
+    , relay-pagination-servant      ^>=0.1.1.2
     , servant                       >=0.20.3   && <0.21
     , servant-client                >=0.20.3   && <0.21
     , servant-client-core
@@ -99,5 +101,6 @@ test-suite relay-pagination-conformance-test
     , tasty-quickcheck              >=0.10     && <0.12
     , text
     , time                          >=1.12     && <1.15
+    , unix
     , uuid-types                    >=1.0      && <1.1
     , warp                          >=3.3      && <3.5

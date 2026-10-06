@@ -7,13 +7,4 @@ packages:
 
 tests: True
 
--- Test-only dependency of relay-pagination-hasql (and later
--- relay-pagination-conformance): throwaway PostgreSQL servers for
--- integration tests. Not on Hackage; bump the pin deliberately.
-source-repository-package
-  type: git
-  location: https://github.com/shinzui/ephemeral-pg.git
-  tag: 215e4ae5fc844d322e2c715369bf5ec4ff285294
-
-package ephemeral-pg
-  tests: False
+-- PostgreSQL fixtures resolve the released ephemeral-pg >=0.3.1 && <0.4.

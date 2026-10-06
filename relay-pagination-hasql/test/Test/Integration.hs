@@ -43,6 +43,7 @@ import Relay.Pagination.Hasql
     timestamptzKey,
   )
 import Relay.Pagination.Hasql.KeyCodec (microsToUtcTime)
+import Relay.Pagination.Test.Postgres (ephemeralPgConfig)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -186,9 +187,10 @@ canonical = sortBy (comparing (Down . snd) <> comparing fst) seedRows
 
 acquire :: IO (Pg.Database, Connection.Connection)
 acquire = do
+  config <- ephemeralPgConfig
   db <-
     either (fail . Text.unpack . Pg.renderStartError) pure
-      =<< Pg.startCached Pg.defaultConfig Pg.defaultCacheConfig
+      =<< Pg.startCached config Pg.defaultCacheConfig
   conn <- either (fail . show) pure =<< Connection.acquire (Pg.connectionSettings db)
   run conn createSchema
   run conn (mapM_ insertRow seedRows)
@@ -229,7 +231,8 @@ insertRow (i, t) =
 -- section for the expected transcript.
 demo :: IO ()
 demo = do
-  result <- Pg.with \db -> do
+  config <- ephemeralPgConfig
+  result <- Pg.withConfig config \db -> do
     conn <- either (fail . show) pure =<< Connection.acquire (Pg.connectionSettings db)
     run conn createSchema
     run conn (mapM_ insertRow seedRows)

@@ -4,6 +4,12 @@ All published packages in this repository share a single version and are
 released together. Per-package details live in each package's own
 `CHANGELOG.md`.
 
+## 0.1.1.2 — 2026-10-06
+
+### Fixed
+
+- Replace the old ephemeral-pg source pin with the released >=0.3.1 && <0.4 range and share one stable effective-uid temporary root across PostgreSQL suites and the example service, preserving startup stale-instance sweeping.
+
 ## 0.1.1.1 — 2026-10-05
 
 ### Other Changes

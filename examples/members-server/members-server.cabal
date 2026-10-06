@@ -67,17 +67,20 @@ library
 
 executable members-server
   import:         lang
-  hs-source-dirs: app
+  hs-source-dirs: app test-support
   main-is:        Main.hs
+  other-modules:  Relay.Pagination.Test.Postgres
 
   -- warp requires the threaded RTS (its TimerManager will not start without it)
   ghc-options:    -threaded
   build-depends:
     , base
-    , ephemeral-pg
+    , directory
+    , ephemeral-pg    >=0.3.1 && <0.4
     , hasql
     , members-server
     , text
+    , unix
     , warp
 
 executable members-openapi
@@ -93,14 +96,16 @@ executable members-openapi
 test-suite members-server-test
   import:         lang
   type:           exitcode-stdio-1.0
-  hs-source-dirs: test
+  hs-source-dirs: test test-support
   main-is:        Main.hs
+  other-modules:  Relay.Pagination.Test.Postgres
 
   -- warp requires the threaded RTS (its TimerManager will not start without it)
   ghc-options:    -threaded
   build-depends:
     , base
-    , ephemeral-pg
+    , directory
+    , ephemeral-pg                  >=0.3.1 && <0.4
     , hasql
     , http-client
     , members-server
@@ -112,4 +117,5 @@ test-suite members-server-test
     , tasty
     , tasty-hunit
     , text
+    , unix
     , warp

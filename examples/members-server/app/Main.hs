@@ -15,13 +15,15 @@ import Example.Members.Handler (membersApp)
 import Example.Members.Seed (createMembersSchema, insertMembers, seedMembers)
 import Hasql.Connection qualified as HasqlConn
 import Network.Wai.Handler.Warp (run)
+import Relay.Pagination.Test.Postgres (ephemeralPgConfig)
 
 main :: IO ()
 main = do
+  config <- ephemeralPgConfig
   -- startCached caches initdb output, so repeat boots are fast.
   db <-
     either (fail . Text.unpack . Pg.renderStartError) pure
-      =<< Pg.startCached Pg.defaultConfig Pg.defaultCacheConfig
+      =<< Pg.startCached config Pg.defaultCacheConfig
   conn <- either (fail . show) pure =<< HasqlConn.acquire (Pg.connectionSettings db)
   createMembersSchema conn
   insertMembers conn seedMembers

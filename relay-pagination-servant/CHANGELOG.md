@@ -2,6 +2,12 @@
 
 Versioning follows the [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
+## 0.1.1.2 — 2026-10-06
+
+### Fixed
+
+- Align the shared version and internal bounds with the PostgreSQL fixture cleanup fix.
+
 ## 0.1.1.1 — 2026-10-05
 
 ### Other Changes

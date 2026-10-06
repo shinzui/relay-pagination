@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            relay-pagination-servant
-version:         0.1.1.1
+version:         0.1.1.2
 synopsis:
   RelayPage servant combinator for Relay-style cursor pagination
 
@@ -51,7 +51,7 @@ library
     , http-types           >=0.12     && <0.13
     , lens                 >=5.3.3    && <5.4
     , openapi-hs           >=5.0      && <5.1
-    , relay-pagination     ^>=0.1.1.1
+    , relay-pagination     ^>=0.1.1.2
     , servant              >=0.20.3   && <0.21
     , servant-client-core  >=0.20.3   && <0.21
     , servant-openapi-hs   >=5.1      && <5.2
@@ -80,7 +80,7 @@ test-suite relay-pagination-servant-test
     , http-types
     , lens
     , openapi-hs
-    , relay-pagination          ^>=0.1.1.1
+    , relay-pagination          ^>=0.1.1.2
     , relay-pagination-servant
     , servant
     , servant-client            >=0.20.3   && <0.21
@@ -106,7 +106,7 @@ executable relay-demo
     , aeson
     , base
     , openapi-hs
-    , relay-pagination          ^>=0.1.1.1
+    , relay-pagination          ^>=0.1.1.2
     , relay-pagination-servant
     , servant
     , servant-server
@@ -130,7 +130,7 @@ executable relay-demo-openapi
     , bytestring                >=0.11     && <0.13
     , lens
     , openapi-hs
-    , relay-pagination          ^>=0.1.1.1
+    , relay-pagination          ^>=0.1.1.2
     , relay-pagination-servant
     , servant
     , servant-openapi-hs
