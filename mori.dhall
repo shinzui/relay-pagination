@@ -77,6 +77,12 @@ in  Schema.Project::{ project =
         , description = Some
             "Cross-repository improvement requests against relay-pagination"
         }
+      , Schema.OkfBundle::{ name = "bug-reports"
+        , path = "docs/bug-reports"
+        , profile = Some "docs/bug-reports/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Defect reports against relay-pagination"
+        }
       , Schema.OkfBundle::{ name = "friction-log"
         , path = "docs/friction-log"
         , profile = Some "docs/friction-log/profile.dhall"
